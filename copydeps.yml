@@ -1,0 +1,86 @@
+- 
+   files: "aos.css"
+   from: "node_modules/aos/dist"
+   to: "scss/custom/components/plugins"
+- 
+   files: "aos.js"
+   from: "node_modules/aos/dist"
+   to: "pages/assets/js"
+-
+  files: "jquery.min.js"
+  from: "node_modules/jquery/dist"
+  to: "pages/assets/js"
+-
+  files: "jquery.smartWizard.min.js"
+  from: "node_modules/smartwizard/dist/js"
+  to: "pages/assets/js"
+- 
+   files: "flatpickr.min.js"
+   from: "node_modules/flatpickr/dist"
+   to: "pages/assets/js"
+- 
+   files: "flatpickr.min.css"
+   from: "node_modules/flatpickr/dist"
+   to: "scss/custom/components/plugins"
+-
+  files: "flickity.pkgd.js"
+  from: "node_modules/flickity/dist"
+  to: "pages/assets/js"
+-
+  files: "flickity.min.css"
+  from: "node_modules/flickity/dist"
+  to: "pages/assets/css"
+- 
+   files: 
+     - "jarallax.min.js"
+     - "jarallax-video.min.js"
+     - "jarallax-element.min.js"
+     - "jarallax.min.js.map"
+     - "jarallax-video.min.js.map"
+     - "jarallax-element.min.js.map"
+   from: "node_modules/jarallax/dist"
+   to: "pages/assets/js"
+- 
+   files: "jarallax.css"
+   from: "node_modules/jarallax/dist"
+   to: "scss/custom/components/plugins"
+-
+  files: 
+    - "popper.min.js"
+    - "popper.min.js.map"
+  from: "node_modules/popper.js/dist/umd"
+  to: "pages/assets/js"
+-
+  files: 
+    - "scrollMonitor.js"
+    - "scrollMonitor.js.map"
+  from: "node_modules/scrollmonitor"
+  to: "pages/assets/js"
+-
+  files: "*.*"
+  from: "node_modules/socicon/font"
+  to: "pages/assets/fonts"
+-
+  files: "prism.js"
+  from: "node_modules/prismjs"
+  to: "pages/assets/js"
+-
+  files: "prism.css"
+  from: "node_modules/prismjs/themes"
+  to: "scss/custom/components/plugins"
+-
+  files: "prism-okaidia.css"
+  from: "node_modules/prismjs/themes"
+  to: "scss/custom/components/plugins"
+- 
+   files: "smooth-scroll.polyfills.min.js"
+   from: "node_modules/smooth-scroll/dist"
+   to: "pages/assets/js"
+-
+  files: "zoom-vanilla.min.js"
+  from: "node_modules/zoom-vanilla.js/dist"
+  to: "pages/assets/js"
+-
+  files: "zoom.css"
+  from: "node_modules/zoom-vanilla.js/dist"
+  to: "scss/custom/components/plugins"

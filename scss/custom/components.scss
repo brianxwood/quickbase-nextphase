@@ -14,6 +14,7 @@
 @import "components/required/card";
 @import "components/required/color";
 @import "components/required/footer";
+@import "components/required/header";
 @import "components/required/lists";
 @import "components/required/media";
 @import "components/required/navbar";
@@ -57,3 +58,6 @@
 @import "components/optional/video";
 @import "components/optional/wizard";
 @import "components/optional/zoom";
+
+// Custom CSS
+@import "components/main";

@@ -42,6 +42,12 @@ $green:   #02B875;
 $teal:    #20c997;
 $cyan:    #17a2b8;
 
+// theme color palette
+$cardinal: #C01449;
+$confetti: #E5DE45;
+$razzmatazz: #E0004D;
+$heavy-metal: #212322;
+
 $colors: ();
 $colors: map-merge((
   "blue":       $blue,
@@ -59,8 +65,8 @@ $colors: map-merge((
   "gray-dark":  $gray-800
 ), $colors);
 
-$primary:       $blue;
-$secondary:     $gray-600;
+$primary:       $confetti;
+$secondary:     $cardinal;
 $success:       $green;
 $info:          $cyan;
 $warning:       $yellow;
@@ -148,7 +154,7 @@ $body-color:                $gray-700;
 //
 // Style anchor elements.
 
-$link-color:                theme-color("primary");
+$link-color:                theme-color('secondary');
 $link-decoration:           none !default;
 $link-hover-color:          darken($link-color, 15%);
 $link-hover-decoration:     none;

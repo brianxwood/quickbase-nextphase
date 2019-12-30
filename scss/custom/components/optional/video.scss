@@ -9,7 +9,7 @@
 //
 // General overrides for default embed styles
 
-.embed-responsive{
+.embed-responsive {
   background: $black;
 }
 
@@ -19,7 +19,7 @@
 
 $video-cover-transition: .35s;
 
-@keyframes fadeOut{
+@keyframes fadeOut {
   0%{ opacity: 1; }
   100%{ opacity: 0; transform: scale(1.5); }
 }

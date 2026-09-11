@@ -81,6 +81,27 @@ const capOf = (def) => (def ? ov('cap:' + def.id, def.maxValue) : 0);
 const konst = (name) => Number(ov('const:' + name, D.constants[name]));
 const shdPerPoint = (stat) => Number(ov('shd:' + stat, D.shd.bonusPerPoint[stat]));
 
+/** How many weapon-type perks a specialization may have active at once; 0 means no limit. */
+function weaponPerkLimit() {
+  const n = Math.round(konst('specWeaponArchetypes'));
+  return n > 0 ? n : Infinity;
+}
+
+/** Weapon-type perks currently taken, oldest choice first. */
+function weaponPerksTaken(build, spec) {
+  return spec.perks.filter((p) => p.type === 'weapon' && (Number(build.perkTiers[p.id]) || 0) > 0);
+}
+
+/* The source stores a flat 165-point budget for every specialization, but the perks themselves
+   total anywhere from 150 to 180, so "spent / 165" never reconciles. The reachable total is the
+   unique perks plus as many weapon archetypes as the limit allows. */
+function specBudget(spec) {
+  const cost = (p) => p.tiers * p.costPerTier;
+  const unique = spec.perks.filter((p) => p.type !== 'weapon').reduce((n, p) => n + cost(p), 0);
+  const weapon = spec.perks.filter((p) => p.type === 'weapon').map(cost).sort((a, b) => b - a);
+  return unique + weapon.slice(0, weaponPerkLimit()).reduce((n, c) => n + c, 0);
+}
+
 /** Brand bonuses are cumulative: 3 pieces grant the 1-, 2- and 3-piece lines. */
 function brandLines(brandName) {
   const brand = D.brands[brandName];
@@ -292,9 +313,16 @@ function add(stats, statType, value, source) {
   stats[key] += Number(value) || 0;
 }
 
+/* Talent modifiers encode armour as a flat amount (Cold grants 5000, Hardened 10000) the same way
+   a gear core does, while every other stat is a percentage. Routing armour through the percentage
+   bucket turns +5000 armour into +5000% of the pool. */
+const TALENT_FLAT_STATS = new Set(['armor', 'armorRegen']);
+
 function applyTalentModifiers(stats, talent) {
   if (!talent || !talent.modifiers) return;
-  for (const [statType, value] of Object.entries(talent.modifiers)) add(stats, statType, value, 'pct');
+  for (const [statType, value] of Object.entries(talent.modifiers)) {
+    add(stats, statType, value, TALENT_FLAT_STATS.has(statType) ? 'flat' : 'pct');
+  }
 }
 
 /** Brand and gear-set counts across the six slots, plus which tiers are live. */
@@ -364,9 +392,11 @@ function gearStats(build) {
 
   const spec = build.spec ? D.specializations[build.spec] : null;
   if (spec) {
+    const allowed = new Set(weaponPerksTaken(build, spec).slice(0, weaponPerkLimit()).map((p) => p.id));
     for (const perk of spec.perks) {
       const tier = Number(build.perkTiers[perk.id]) || 0;
       if (tier <= 0) continue;
+      if (perk.type === 'weapon' && !allowed.has(perk.id)) continue;
       const value = perk.valuePerTier * Math.min(tier, perk.tiers);
       add(stats, perk.statType, value, perk.statType === 'armor' ? 'flat' : 'pct');
     }
@@ -702,6 +732,27 @@ const qualityClass = (item) => {
   return '';
 };
 const label = (statType) => STAT_LABEL[statType] || statType;
+
+/* Short forms so an attachment's effect fits on its own option line. */
+const SHORT_STAT = {
+  critChance: 'crit chance', critDamage: 'crit damage', headshotDamage: 'headshot dmg',
+  weaponDamage: 'weapon dmg', totalWeaponDamage: 'total weapon dmg', reloadSpeed: 'reload speed',
+  stability: 'stability', accuracy: 'accuracy', optimalRange: 'optimal range',
+  rateOfFire: 'rate of fire', magazineSize: 'mag size', magazineSizePct: 'mag size',
+  swapSpeed: 'swap speed', weaponHandling: 'handling', damageToElites: 'vs elites',
+  damageToArmor: 'vs armor', damageToHealth: 'vs health', damageToOutOfCover: 'vs out of cover',
+  ammoCapacity: 'ammo capacity', skillDamage: 'skill dmg', skillHaste: 'skill haste'
+};
+
+/** "+5% crit damage, -20% optimal range" — the non-zero part of a modifier bag. */
+function modifierSummary(modifiers) {
+  if (!modifiers) return '';
+  return Object.entries(modifiers)
+    .filter(([, v]) => Number(v))
+    .map(([k, v]) => (v > 0 ? '+' : '\u2212') + Math.abs(v) + '% '
+      + (SHORT_STAT[k] || label(k).toLowerCase()))
+    .join(', ');
+}
 const statText = (statType, value) => {
   const key = PCT_SOURCE_REMAP[statType] || statType;
   if (key === 'armorFlat' || key === 'healthFlat' || statType === 'armorRegen') {
@@ -975,9 +1026,13 @@ function renderWeaponSlot(w, index, ev) {
     for (const kind of ATTACHMENT_KINDS) {
       const choices = attachmentChoices(w, kind);
       if (!choices.length) continue;
+      const attOptions = alpha(choices.map((a) => {
+        const effect = modifierSummary(a.modifiers);
+        return { value: a.id, text: a.name + (effect ? '  ·  ' + effect : '  ·  no bonus') };
+      }));
       rows.push('<div class="row-label"><span class="eyebrow">' + kind + '</span>'
         + '<select data-wpn="' + index + '" data-attachment="' + kind + '" aria-label="' + kind + '">'
-        + options(alpha(choices.map((a) => ({ value: a.id, text: a.name }))), w.attachments[kind], '— empty —')
+        + options(attOptions, w.attachments[kind], '— empty —')
         + '</select></div>');
     }
 
@@ -1025,19 +1080,30 @@ function renderSpec(build) {
     + options(names.map((n) => ({ value: n, text: n })), build.spec, '— no specialization —') + '</select>';
   if (!spec) return html;
 
+  const budget = specBudget(spec);
   const spent = spec.perks.reduce((sum, p) =>
     sum + (Number(build.perkTiers[p.id]) || 0) * p.costPerTier, 0);
+  const limit = weaponPerkLimit();
+  const chosen = weaponPerksTaken(build, spec);
+
   html += '<p class="hint" style="margin:8px 0">' + esc(spec.description)
-    + ' Grenade: ' + esc(spec.grenade) + '. Skill: ' + esc(spec.uniqueSkill) + '.'
-    + ' <span class="num">' + spent + ' / ' + spec.totalPoints + '</span> points spent.</p>';
+    + ' Grenade: ' + esc(spec.grenade) + '. Skill: ' + esc(spec.uniqueSkill) + '.<br>'
+    + '<span class="num">' + spent + ' / ' + budget + '</span> points spent · '
+    + '<span class="num">' + chosen.length + ' / '
+    + (limit === Infinity ? 'any' : limit) + '</span> weapon archetypes.</p>';
+
   html += '<div class="perk-grid">' + spec.perks.map((p) => {
     const tier = Number(build.perkTiers[p.id]) || 0;
+    const blocked = p.type === 'weapon' && !tier && chosen.length >= limit;
     const buttons = Array.from({ length: p.tiers + 1 }, (_, t) =>
-      '<button data-perk="' + esc(p.id) + '" data-tier="' + t + '" aria-pressed="' + (t === tier) + '">'
-      + (t === 0 ? 'off' : t) + '</button>').join('');
-    return '<div class="perk"><span class="pname">' + esc(p.name) + '</span>'
+      '<button data-perk="' + esc(p.id) + '" data-tier="' + t + '"'
+      + (blocked && t > 0 ? ' disabled' : '')
+      + ' aria-pressed="' + (t === tier) + '">' + (t === 0 ? 'off' : t) + '</button>').join('');
+    return '<div class="perk' + (blocked ? ' blocked' : '') + '">'
+      + '<span class="pname">' + esc(p.name) + '</span>'
       + '<span class="tierpick">' + buttons + '</span>'
-      + '<span class="pdesc">' + esc(p.description) + ' · ' + p.costPerTier + ' pts/tier</span></div>';
+      + '<span class="pdesc">' + esc(p.description) + ' · ' + p.costPerTier + ' pts/tier'
+      + (blocked ? ' · archetype limit reached' : '') + '</span></div>';
   }).join('') + '</div>';
   return html;
 }
@@ -1117,15 +1183,18 @@ function renderReadout() {
   const cap = konst('critChanceCap');
   const chc = Math.min(s.critChance || 0, cap);
 
-  const headline = '<div class="headline">'
-    + '<div><span class="k eyebrow">Sustained DPS</span><span class="v em">'
-    + (dmg ? compact(dmg.sustainedDps) : '—') + '</span>'
-    + '<span class="sub">' + (dmg ? int(dmg.perShot) + ' per shot' : 'no weapon') + '</span></div>'
+  const headline = '<div class="hero">'
+    + '<span class="k eyebrow">Sustained DPS</span>'
+    + '<span class="v">' + (dmg ? compact(dmg.sustainedDps) : '—') + '</span>'
+    + '<span class="sub">' + (dmg ? int(dmg.perShot) + ' per shot · '
+      + (ev.lead && ev.lead.dmg ? esc(ev.lead.dmg.weapon.name) : '') : 'no weapon equipped') + '</span>'
+    + '</div>'
+    + '<div class="headline">'
     + '<div><span class="k eyebrow">Time to kill</span><span class="v">'
     + (ev.ttk ? ev.ttk.toFixed(2) + 's' : '—') + '</span>'
     + '<span class="sub">' + compact(state.scenario.targetHp) + ' pool</span></div>'
-    + '<div><span class="k eyebrow">Armor</span><span class="v">' + compact(ev.surv.armor) + '</span>'
-    + '<span class="sub">' + int(ev.surv.health) + ' health</span></div>'
+    + '<div><span class="k eyebrow">Effective HP</span><span class="v">' + compact(ev.surv.ehp) + '</span>'
+    + '<span class="sub">' + compact(ev.surv.armor) + ' armor</span></div>'
     + '<div><span class="k eyebrow">Skill tier</span><span class="v">' + ev.tier + '</span>'
     + '<span class="sub">' + pct(ev.skillDamageTotal) + ' skill dmg</span></div>'
     + '</div>';
@@ -1177,7 +1246,7 @@ function renderReadout() {
   ].join('');
 
   document.getElementById('readout').innerHTML =
-    '<div class="panel"><header><h2>Readout</h2></header>' + headline
+    '<div class="panel readout-main"><header><h2>Readout</h2></header>' + headline
     + '<div class="body"><p class="hint" style="margin:0">Talents and stacking buffs count at full'
     + ' stacks, so these are ceiling numbers — useful for ranking loadouts, optimistic as absolutes.</p>'
     + '</div></div>'
@@ -1525,6 +1594,7 @@ function onEditorInput(e) {
 document.getElementById('editor').addEventListener('click', (e) => {
   const perk = e.target.closest('button[data-perk]');
   if (!perk) return;
+  if (perk.disabled) return;
   const build = activeBuild();
   build.perkTiers[perk.dataset.perk] = Number(perk.dataset.tier);
   save();

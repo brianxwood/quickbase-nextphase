@@ -29,7 +29,8 @@ whole app.
 - **Brand and gear set bonuses** — counted across the six slots, with 1/2/3-piece brand tiers and
   2/3/4-piece set tiers lighting up as pieces are added.
 - **Weapons** — 3 slots: weapon, core attribute, two attributes, talent, attachments, expertise.
-- **Specialization** — all six, with per-perk tier allocation and point cost tracking.
+- **Specialization** — all six, with per-perk tier allocation, point cost tracking and a cap on how
+  many weapon archetypes can be boosted at once (three by default, editable).
 - **SHD watch** — point allocation across the four categories.
 - **Derived output** — sustained/burst DPS, damage per shot, effective RPM, time to kill, armor,
   health, effective HP, skill tier and skill damage, plus the full stat readout.
@@ -62,6 +63,13 @@ loadouts comparable on one number.
   editable constant.
 - **Skill damage per tier is 15%**, also editable.
 - Conditional talents (positional, on-kill, below-armor-threshold) are applied unconditionally.
+- **Talent armour is flat, not proportional.** Talent modifiers encode armour the way a gear core
+  does — Cold grants 5,000, Hardened 10,000 — so it is added to the pool rather than multiplying it.
+  Every other talent modifier is a percentage.
+- **Specialization budgets are derived, not quoted.** The source stores a flat 165-point budget for
+  all six specializations while their own perk costs total anywhere from 150 to 180, so "spent /
+  165" never reconciles. The budget shown is computed from the perks themselves: every unique perk
+  maxed plus as many weapon archetypes as the limit allows.
 - Signature weapon damage is tracked separately so specialization signature perks do not inflate
   normal weapon DPS.
 

@@ -104,7 +104,10 @@ out = {
     },
     "constants": {"baseCritDamage": 25, "critChanceCap": 60, "baseHealth": 100000,
                   "skillTierMax": 6, "skillDamagePerTier": 15,
-                  "pvpMultiplier": 0.5, "falloffWorst": 0.5}
+                  "pvpMultiplier": 0.5, "falloffWorst": 0.5,
+                  # How many weapon-type perks a specialization may run at once. The source has
+                  # seven per spec with no cap; set to 0 to remove the limit.
+                  "specWeaponArchetypes": 3}
 }
 js = ("/* The Division 2 reference tables. Generated — see README.md for provenance and licences.\n"
       "   Every number here can be overridden in the app's Tables view without touching this file. */\n"

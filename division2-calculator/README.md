@@ -141,6 +141,27 @@ multiplier on what it starts with, so it has its own readout row and its own mat
 the total only in Effective HP. Folding it into Armor would have reported a Heartbreaker at 2.3M
 armour, which is not a number the character sheet would ever show.
 
+### Weapon attachments are the weakest table
+
+The source recorded only an attachment's *offensive* stats. The accuracy, stability, weapon
+handling and optimal range that most mods actually grant were never captured, which is why 35 of
+the 91 entries carry nothing at all and read as "not recorded" — a gap in the table, not a mod that
+does nothing. Spot checks show the recorded values are thin too: the T2 Micro Red Dot Sight is
++20% accuracy / −10% critical hit chance in game and −3% critical hit chance here. The entry list
+does not match the current game either, 91 against roughly 72 actual mods.
+
+No reachable source had a complete table, so rather than invent values every attachment is
+editable: filter by its name in Tables and all eleven stats an attachment can carry are there to
+fill in. Corrections save with your loadouts like any other override.
+
+One unit bug is fixed. An attachment's reload figure is a delta in **seconds** — a Handstop reads
+−0.2 (faster), an extended magazine +0.3 (slower), and the signs pair correctly with the magazine
+size beside them — but weapon and gear attributes use the same key for a *percentage*. It was being
+read as a percentage, so an extended magazine made reloading 0.3% faster instead of a third of a
+second slower. It is now its own stat, and the generator renames it in the data so one word does
+not mean two units.
+
+
 ### Assumptions worth knowing
 - **Base health is 100,000**, used as the pool that percentage health bonuses multiply. It is an
   editable constant.

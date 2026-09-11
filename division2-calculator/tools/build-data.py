@@ -73,6 +73,18 @@ TRIGGER = re.compile(
     r"|taking damage|hitting|damaging|applying|swapping|reloading|entering|cover to cover"
     r"|\bbelow\b", re.I)
 
+# Attachment "reloadSpeed" is a delta in SECONDS, not a percentage: a Handstop reads -0.2 (faster)
+# and an Extended mag +0.3 (slower), and the signs pair correctly with the magazine-size changes
+# beside them. Weapon and gear attributes use the same key for a percentage, so rename it here
+# rather than let one word mean two units. "magazineSize" is a percentage, so say so.
+for kind, mods in db["attachments"].items():
+    for mod in mods:
+        m = mod.get("modifiers") or {}
+        if "reloadSpeed" in m:
+            m["reloadSeconds"] = m.pop("reloadSpeed")
+        if "magazineSize" in m:
+            m["magazineSizePct"] = m.pop("magazineSize")
+
 conditional_counts = {"gearTalents": [0, 0], "weaponTalents": [0, 0]}
 for key in ("gearTalents", "weaponTalents"):
     for t in db[key]:

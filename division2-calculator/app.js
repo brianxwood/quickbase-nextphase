@@ -20,6 +20,14 @@ const MAX_EXPERTISE = 21;
 /* Stats that are absolute amounts rather than percentages. */
 const FLAT_STATS = new Set(['armorFlat', 'healthFlat', 'armorRegen']);
 
+/* What an attachment can give. The source only ever recorded the offensive half, so the handling
+   stats most mods actually grant are absent — they are listed here so they can be filled in. */
+const ATTACHMENT_STATS = [
+  'critChance', 'critDamage', 'headshotDamage', 'weaponDamage',
+  'accuracy', 'stability', 'weaponHandling', 'optimalRange',
+  'rateOfFire', 'magazineSizePct', 'reloadSeconds'
+];
+
 /* Brand, gear-set and specialization bonuses express armor and health as percentages of the
    pool, while a gear roll adds a flat amount. Same stat name, different bucket. */
 const PCT_SOURCE_REMAP = { health: 'healthPct', totalArmor: 'armorPct', armor: 'armorPct' };
@@ -47,7 +55,8 @@ const STAT_LABEL = {
   skillRepair: 'Skill repair', skillDuration: 'Skill duration', statusEffects: 'Status effects',
   skillEfficiency: 'Skill efficiency', skillHealth: 'Skill health', shieldHealth: 'Shield health',
   burnDamage: 'Burn damage', burnDuration: 'Burn duration', bleedDamage: 'Bleed damage',
-  stability: 'Stability', accuracy: 'Accuracy', optimalRange: 'Optimal range',
+  reloadSeconds: 'Reload time', stability: 'Stability', accuracy: 'Accuracy',
+  optimalRange: 'Optimal range',
   reloadSpeed: 'Reload speed', rateOfFire: 'Rate of fire', magazineSizePct: 'Magazine size',
   magazineSize: 'Magazine size', swapSpeed: 'Swap speed', ammoCapacity: 'Ammo capacity',
   increasedThreat: 'Increased threat', reducedThreat: 'Reduced threat'
@@ -95,6 +104,16 @@ const ov = (key, dflt) => (Object.prototype.hasOwnProperty.call(overrides, key) 
 const capOf = (def) => (def ? ov('cap:' + def.id, def.maxValue) : 0);
 const konst = (name) => Number(ov('const:' + name, D.constants[name]));
 const shdPerPoint = (stat) => Number(ov('shd:' + stat, D.shd.bonusPerPoint[stat]));
+
+/** An attachment's effect, with any corrections made in Tables applied. */
+function attachmentMods(att) {
+  const out = {};
+  for (const stat of ATTACHMENT_STATS) {
+    const value = Number(ov('att:' + att.id + ':' + stat, (att.modifiers || {})[stat] || 0)) || 0;
+    if (value) out[stat] = value;
+  }
+  return out;
+}
 
 const dynParam = (talentId, key) => {
   const def = (D.dynamicTalents || {})[talentId];
@@ -601,9 +620,9 @@ function statsForWeapon(base, build, index, withConditional) {
   }
   for (const kind of ATTACHMENT_KINDS) {
     const att = ATTACHMENTS[w.attachments[kind]];
-    if (!att || !att.modifiers) continue;
-    for (const [statType, value] of Object.entries(att.modifiers)) {
-      add(stats, statType === 'magazineSize' ? 'magazineSizePct' : statType, value, 'pct');
+    if (!att) continue;
+    for (const [statType, value] of Object.entries(attachmentMods(att))) {
+      add(stats, statType, value, 'pct');
     }
   }
   applyTalentModifiers(stats, WEAPON_TALENTS[w.talentId], withConditional);
@@ -635,7 +654,8 @@ function damage(build, index, stats, sc) {
 
   const rpm = def.rpm * (1 + (stats.rateOfFire || 0) / 100);
   const mag = Math.max(1, Math.round(def.magazineSize * (1 + (stats.magazineSizePct || 0) / 100)));
-  const reload = Math.max(0.1, def.reloadSpeed * (1 - (stats.reloadSpeed || 0) / 100));
+  const reload = Math.max(0.1,
+    def.reloadSpeed * (1 - (stats.reloadSpeed || 0) / 100) + (stats.reloadSeconds || 0));
 
   const critChance = Math.min(stats.critChance || 0, konst('critChanceCap')) / 100;
   const critDamage = (konst('baseCritDamage') + (stats.critDamage || 0)) / 100;
@@ -938,7 +958,8 @@ const SHORT_STAT = {
   rateOfFire: 'rate of fire', magazineSize: 'mag size', magazineSizePct: 'mag size',
   swapSpeed: 'swap speed', weaponHandling: 'handling', damageToElites: 'vs elites',
   damageToArmor: 'vs armor', damageToHealth: 'vs health', damageToOutOfCover: 'vs out of cover',
-  ammoCapacity: 'ammo capacity', skillDamage: 'skill dmg', skillHaste: 'skill haste'
+  ammoCapacity: 'ammo capacity', skillDamage: 'skill dmg', skillHaste: 'skill haste',
+  reloadSeconds: 'reload time'
 };
 
 /** "+5% crit damage, -20% optimal range" — the non-zero part of a modifier bag. */
@@ -946,7 +967,8 @@ function modifierSummary(modifiers) {
   if (!modifiers) return '';
   return Object.entries(modifiers)
     .filter(([, v]) => Number(v))
-    .map(([k, v]) => (v > 0 ? '+' : '\u2212') + Math.abs(v) + '% '
+    .map(([k, v]) => (v > 0 ? '+' : '\u2212') + Math.abs(v)
+      + (k === 'reloadSeconds' ? 's ' : '% ')
       + (SHORT_STAT[k] || label(k).toLowerCase()))
     .join(', ');
 }
@@ -1241,8 +1263,8 @@ function renderWeaponSlot(w, index, ev) {
       const choices = attachmentChoices(w, kind);
       if (!choices.length) continue;
       const attOptions = alpha(choices.map((a) => {
-        const effect = modifierSummary(a.modifiers);
-        return { value: a.id, text: a.name + (effect ? '  ·  ' + effect : '  ·  no bonus') };
+        const effect = modifierSummary(attachmentMods(a));
+        return { value: a.id, text: a.name + (effect ? '  ·  ' + effect : '  ·  not recorded') };
       }));
       rows.push('<div class="row-label"><span class="eyebrow">' + kind + '</span>'
         + '<select data-wpn="' + index + '" data-attachment="' + kind + '" aria-label="' + kind + '">'
@@ -1664,6 +1686,30 @@ function renderTables() {
         editRow('const:' + name, name.replace(/([A-Z])/g, ' $1').toLowerCase(), D.constants[name])).join('')
       + '</div>');
   }
+  /* 91 attachments x 11 stats is far too much to render at once, so these appear only once you
+     filter for one. The source recorded the offensive half and nothing else, which is why so many
+     read as "not recorded" — the blanks are gaps in the table, not mods that do nothing. */
+  if (state.tableFilter.trim()) {
+    let shown = 0, more = false;
+    for (const kind of ATTACHMENT_KINDS) {
+      for (const att of (D.attachments[kind] || [])) {
+        if (!hit(att.name) && !hit(kind)) continue;
+        if (shown >= 24) { more = true; break; }
+        shown += 1;
+        cards.push('<div class="edit-card"><h3>' + esc(att.name)
+          + ' <span class="dflt">' + esc(kind) + '</span></h3>'
+          + ATTACHMENT_STATS.map((stat) => editRow('att:' + att.id + ':' + stat,
+            label(stat) + (stat === 'reloadSeconds' ? ' (seconds)' : ' (%)'),
+            (att.modifiers || {})[stat] || 0)).join('')
+          + '</div>');
+      }
+    }
+    if (more) {
+      cards.push('<div class="edit-card"><h3>More attachments match</h3>'
+        + '<p class="dflt">Narrow the filter to reach the rest.</p></div>');
+    }
+  }
+
   for (const [setName, def] of Object.entries(D.dynamicSetTalents || {})) {
     if (!hit(setName) && !hit(def.talent) && !hit('talent formula')) continue;
     cards.push('<div class="edit-card"><h3>' + esc(def.talent)
@@ -1740,7 +1786,11 @@ function renderTables() {
   host.innerHTML = '<div class="callout"><strong>These are the numbers the engine uses.</strong> '
     + 'They were read off community tables current to ' + esc(D.dataVersion)
     + ', not from the game files, so a tuning pass can leave one stale. Edit any value here and every'
-    + ' loadout recalculates — your edits are saved with your loadouts.</div>'
+    + ' loadout recalculates — your edits are saved with your loadouts.<br><br>'
+    + '<strong>Weapon attachments are the weakest part of this table.</strong> The source recorded'
+    + ' only their offensive stats, so the accuracy, stability and handling most mods actually'
+    + ' grant are missing, and many read as "not recorded". Filter by an attachment name to'
+    + ' correct one.</div>'
     + '<div class="panel"><header><h2>Tables</h2><span class="spacer"></span>'
     + '<span class="chip">' + changedCount + ' edited</span>'
     + '<button class="ghost" id="btn-reset-tables"' + (changedCount ? '' : ' disabled') + '>Reset all</button>'

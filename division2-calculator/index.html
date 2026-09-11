@@ -34,6 +34,8 @@
   --shadow:      0 1px 0 rgba(255,255,255,.03), 0 8px 24px rgba(0,0,0,.35);
   --focus:       #6fb7ff;
 
+  color-scheme: dark;
+
   --f-display: "Barlow Condensed", "Arial Narrow", Helvetica, sans-serif;
   --f-body: "Barlow", ui-sans-serif, system-ui, sans-serif;
   --f-data: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -63,6 +65,7 @@
     --q-plain:     #566674;
     --shadow:      0 1px 2px rgba(20,30,40,.06), 0 8px 20px rgba(20,30,40,.08);
     --focus:       #1863c4;
+    color-scheme: light;
   }
 }
 :root[data-theme="light"] {
@@ -89,6 +92,7 @@
   --q-plain:     #566674;
   --shadow:      0 1px 2px rgba(20,30,40,.06), 0 8px 20px rgba(20,30,40,.08);
   --focus:       #1863c4;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -161,6 +165,33 @@ button.primary {
 button.primary:hover { filter: brightness(1.08); color: var(--accent-ink); }
 button.ghost { background: transparent; }
 button.danger:hover { color: var(--bad); border-color: var(--bad); }
+
+/* Option groups wear the item quality colours the slot borders already use. Browsers vary in how
+   much of a native popup they will style, so each rule stands on its own. */
+optgroup {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  background-color: var(--panel);
+  color: var(--q-plain);
+}
+optgroup.q-gearset { color: var(--q-gearset); }
+optgroup.q-exotic  { color: var(--q-exotic); }
+optgroup.q-named   { color: var(--q-named); }
+optgroup.q-highend { color: var(--q-highend); }
+optgroup.q-proto   { color: var(--q-proto); }
+optgroup.q-plain   { color: var(--q-plain); }
+option {
+  font-family: var(--f-body);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  background-color: var(--panel);
+  color: var(--ink);
+}
 
 select, input[type="text"], input[type="number"] {
   font-family: var(--f-body);

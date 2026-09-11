@@ -724,7 +724,9 @@ function options(groups, selected, placeholder) {
     + esc(it.text) + '</option>').join('');
   if (Array.isArray(groups) && groups.length && groups[0] && groups[0].items) {
     html += groups.map((g) => g.items.length
-      ? '<optgroup label="' + esc(g.label) + '">' + renderItems(g.items) + '</optgroup>' : '').join('');
+      ? '<optgroup label="' + esc(g.label) + '"'
+        + (g.cls ? ' class="' + esc(g.cls) + '"' : '') + '>'
+        + renderItems(g.items) + '</optgroup>' : '').join('');
   } else {
     html += renderItems(groups || []);
   }
@@ -792,16 +794,23 @@ function renderLoadouts() {
 function renderGearSlot(g, index) {
   const item = itemOf(g);
   const groups = [
-    { label: 'Gear sets', items: [] }, { label: 'Brand sets', items: [] },
-    { label: 'Named', items: [] }, { label: 'Exotic', items: [] }, { label: 'Other', items: [] }
+    { label: 'Gear sets', cls: 'q-gearset', items: [] },
+    { label: 'Exotic', cls: 'q-exotic', items: [] },
+    { label: 'Named', cls: 'q-named', items: [] },
+    { label: 'Brand sets', cls: 'q-highend', items: [] },
+    { label: 'Prototype', cls: 'q-proto', items: [] },
+    { label: 'Other', cls: 'q-plain', items: [] }
   ];
+  const bucket = { 'Gear sets': 0, Exotic: 1, Named: 2, 'Brand sets': 3, Prototype: 4, Other: 5 };
   for (const candidate of GEAR_BY_SLOT[g.slot]) {
     const entry = { value: candidate.id, text: candidate.name };
-    if (candidate.gearSet) groups[0].items.push(entry);
-    else if (candidate.quality === 'Exotic') groups[3].items.push(entry);
-    else if (candidate.isNamedItem || candidate.quality === 'Named') groups[2].items.push(entry);
-    else if (candidate.brand) groups[1].items.push(entry);
-    else groups[4].items.push(entry);
+    let into = 'Other';
+    if (candidate.gearSet) into = 'Gear sets';
+    else if (candidate.quality === 'Exotic') into = 'Exotic';
+    else if (candidate.isNamedItem || candidate.quality === 'Named') into = 'Named';
+    else if (candidate.quality === 'Prototype') into = 'Prototype';
+    else if (candidate.brand) into = 'Brand sets';
+    groups[bucket[into]].items.push(entry);
   }
   for (const group of groups) group.items = alpha(group.items);
 

@@ -124,6 +124,25 @@ out = {
             "Utility": ["skillDamage", "skillHaste", "skillDuration", "skillRepair"],
             "Handling": ["accuracy", "stability", "reloadSpeed", "magazineSizePct"]}
     },
+    # Talents whose effect depends on the rest of the build cannot be a flat modifier bag, so the
+    # app carries hand-written formulas for them and reads the numbers from here.
+    "dynamicTalents": {
+        "gt_memento_kill": {
+            "name": "Kill Confirmed",
+            "item": "Memento",
+            "params": {
+                # short-term buff (10s), one step per equipped core of that colour
+                "redWeaponDamage": 5,
+                "blueBonusArmor": 10,
+                "yellowSkillEfficiency": 5,
+                # long-term buff (300s), per trophy collected
+                "maxStacks": 30,
+                "stackWeaponDamage": 1,
+                "stackSkillEfficiency": 1,
+                "stackArmorRegenPct": 0.1
+            }
+        }
+    },
     "constants": {"baseCritDamage": 25, "critChanceCap": 60, "baseHealth": 100000,
                   "skillTierMax": 6, "skillDamagePerTier": 15,
                   "pvpMultiplier": 0.5, "falloffWorst": 0.5,

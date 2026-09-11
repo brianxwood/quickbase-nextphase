@@ -36,7 +36,8 @@ const STAT_LABEL = {
   rifleDamage: 'Rifle damage', mmrDamage: 'Marksman rifle damage',
   shotgunDamage: 'Shotgun damage', pistolDamage: 'Pistol damage',
   armorFlat: 'Armor (flat)', armorPct: 'Total armor', healthFlat: 'Health (flat)',
-  healthPct: 'Total health', armorRegen: 'Armor regeneration', armorOnKill: 'Armor on kill',
+  healthPct: 'Total health', armorRegen: 'Armor regeneration',
+  armorRegenPct: 'Armor regeneration (% of pool)', armorOnKill: 'Armor on kill',
   incomingRepairs: 'Incoming repairs', hazardProtection: 'Hazard protection',
   explosiveRes: 'Explosive resistance', pulseResistance: 'Pulse resistance',
   bleedRes: 'Bleed resistance', burnRes: 'Burn resistance', blindDeafRes: 'Blind/deaf resistance',
@@ -94,6 +95,65 @@ const ov = (key, dflt) => (Object.prototype.hasOwnProperty.call(overrides, key) 
 const capOf = (def) => (def ? ov('cap:' + def.id, def.maxValue) : 0);
 const konst = (name) => Number(ov('const:' + name, D.constants[name]));
 const shdPerPoint = (stat) => Number(ov('shd:' + stat, D.shd.bonusPerPoint[stat]));
+
+const dynParam = (talentId, key) => {
+  const def = (D.dynamicTalents || {})[talentId];
+  const dflt = def && def.params ? def.params[key] : 0;
+  return Number(ov('dyn:' + talentId + ':' + key, dflt)) || 0;
+};
+
+/** Red / blue / yellow cores across the six gear slots; a three-core piece counts as one of each. */
+function coreCounts(build) {
+  const counts = { weaponDamage: 0, armor: 0, skillTier: 0 };
+  for (const g of build.gear) {
+    const item = itemOf(g);
+    if (!item) continue;
+    if (item.allCores) {
+      counts.weaponDamage += 1; counts.armor += 1; counts.skillTier += 1;
+      continue;
+    }
+    const core = g.coreId ? GEAR_CORES[g.coreId] : null;
+    if (core && core.statType in counts) counts[core.statType] += 1;
+  }
+  return counts;
+}
+
+/* Some talents read the rest of the build, so a flat modifier bag cannot describe them. These
+   compute against it instead, and return stat keys directly rather than statTypes to route. */
+const DYNAMIC_TALENTS = {
+  gt_memento_kill: {
+    conditional: true,
+    compute(ctx) {
+      const p = (k) => dynParam('gt_memento_kill', k);
+      const stacks = p('maxStacks');
+      return {
+        weaponDamage: ctx.cores.weaponDamage * p('redWeaponDamage')
+          + stacks * p('stackWeaponDamage'),
+        armorPct: ctx.cores.armor * p('blueBonusArmor'),
+        skillEfficiency: ctx.cores.skillTier * p('yellowSkillEfficiency')
+          + stacks * p('stackSkillEfficiency'),
+        armorRegenPct: stacks * p('stackArmorRegenPct')
+      };
+    },
+    describe(ctx) {
+      const p = (k) => dynParam('gt_memento_kill', k);
+      const c = ctx.cores;
+      const bag = DYNAMIC_TALENTS.gt_memento_kill.compute(ctx);
+      return 'Your cores: ' + c.weaponDamage + ' red · ' + c.armor + ' blue · ' + c.skillTier
+        + ' yellow. At ' + p('maxStacks') + ' trophies that is +' + bag.weaponDamage
+        + '% weapon damage, +' + bag.armorPct + '% bonus armor, +' + bag.skillEfficiency
+        + '% skill efficiency and +' + bag.armorRegenPct.toFixed(1) + '% armor regen per second.';
+    }
+  }
+};
+
+function applyBag(stats, bag) {
+  for (const [key, value] of Object.entries(bag || {})) {
+    if (!value) continue;
+    if (!(key in stats)) stats[key] = 0;
+    stats[key] += value;
+  }
+}
 
 /** How many weapon-type perks a specialization may have active at once; 0 means no limit. */
 function weaponPerkLimit() {
@@ -355,6 +415,7 @@ function countSets(build) {
 /** Everything the gear, brands, sets, specialization and watch contribute. */
 function gearStats(build, withConditional) {
   const stats = blankStats();
+  const ctx = { cores: coreCounts(build), build };
 
   for (const g of build.gear) {
     const item = itemOf(g);
@@ -386,7 +447,13 @@ function gearStats(build, withConditional) {
       add(stats, def.statType, m.value == null ? capOf(def) : m.value, 'flat');
     }
     if (item.hasTalent) {
-      applyTalentModifiers(stats, GEAR_TALENTS[lockedTalentOf(item) || g.talentId], withConditional);
+      const talentId = lockedTalentOf(item) || g.talentId;
+      const dynamic = DYNAMIC_TALENTS[talentId];
+      if (dynamic) {
+        if (withConditional || !dynamic.conditional) applyBag(stats, dynamic.compute(ctx));
+      } else {
+        applyTalentModifiers(stats, GEAR_TALENTS[talentId], withConditional);
+      }
     }
   }
 
@@ -477,7 +544,8 @@ function skillTierOf(stats) {
 function survivability(stats) {
   const armor = stats.armorFlat * (1 + stats.armorPct / 100);
   const health = konst('baseHealth') * (1 + stats.healthPct / 100) + stats.healthFlat;
-  return { armor, health, ehp: armor + health, regen: stats.armorRegen };
+  const regen = (stats.armorRegen || 0) + armor * ((stats.armorRegenPct || 0) / 100);
+  return { armor, health, ehp: armor + health, regen };
 }
 
 /* The Division 2 per-shot damage is a product of separate buckets. Headshot and critical
@@ -1013,6 +1081,10 @@ function renderGearSlot(g, index) {
         rows.push('<p class="hint">Set piece — only ' + esc(item.gearSet) + ' talents roll here.</p>');
       }
       if (talent) rows.push('<p class="talent-desc">' + richText(talent.description) + '</p>');
+      const dynamic = DYNAMIC_TALENTS[chosen];
+      if (dynamic && dynamic.describe) {
+        rows.push('<p class="hint computed">' + esc(dynamic.describe({ cores: coreCounts(activeBuild()) })) + '</p>');
+      }
     }
 
     rows.push('<div class="row-label"><span class="eyebrow">Expertise</span>'
@@ -1237,13 +1309,21 @@ function renderEditor() {
   document.getElementById('editor').innerHTML = html.join('');
 }
 
+/* Values are the resting sheet. Where a talent adds to a stat only once it has procced, the
+   extra rides alongside as "+n" rather than being folded in — otherwise the panel reads as a
+   permanent total the character screen would never show. */
 function statRow(key, value, opts) {
   const o = opts || {};
-  const zero = !value;
-  const text = o.text != null ? o.text
-    : FLAT_STATS.has(key) || o.flat ? int(value) : pct(value);
+  const flat = FLAT_STATS.has(key) || o.flat;
+  const fmt = (v) => (flat ? int(v) : pct(v));
+  const bonus = Math.round((o.bonus || 0) * 100) / 100;
+  const zero = !value && !bonus;
+  const text = o.text != null ? o.text : fmt(value);
   return '<div class="srow' + (zero ? ' zero' : '') + (o.capped ? ' capped' : '') + '">'
-    + '<span>' + esc(o.label || label(key)) + '</span><span class="sv">' + text + '</span></div>';
+    + '<span>' + esc(o.label || label(key)) + '</span>'
+    + '<span class="sv">' + text
+    + (bonus > 0 ? '<span class="proc">+' + fmt(bonus) + '</span>' : '')
+    + '</span></div>';
 }
 
 function renderReadout() {
@@ -1251,9 +1331,14 @@ function renderReadout() {
   if (!build) return;
   const ev = evaluate(build, state.scenario);
   const s = ev.lead ? ev.lead.stats : ev.base;
+  const f = ev.lead ? ev.lead.statsFloor : ev.baseFloor;
   const dmg = ev.lead ? ev.lead.dmg : null;
   const cap = konst('critChanceCap');
-  const chc = Math.min(s.critChance || 0, cap);
+  const chc = Math.min(f.critChance || 0, cap);
+  const chcPeak = Math.min(s.critChance || 0, cap);
+  /** resting value with the procced remainder alongside */
+  const row = (key, opts) => statRow(key, f[key] || 0,
+    Object.assign({ bonus: (s[key] || 0) - (f[key] || 0) }, opts || {}));
 
   const floorDps = ev.lead && ev.lead.floor ? ev.lead.floor.sustainedDps : 0;
   const ceilDps = ev.lead && ev.lead.ceiling ? ev.lead.ceiling.sustainedDps : 0;
@@ -1286,49 +1371,50 @@ function renderReadout() {
     + '</div>';
 
   const offense = [
-    statRow('weaponDamage', s.weaponDamage),
-    statRow('totalWeaponDamage', s.totalWeaponDamage),
-    statRow('critChance', chc, { capped: (s.critChance || 0) > cap, label: 'Critical hit chance' + ((s.critChance || 0) > cap ? ' (capped)' : '') }),
-    statRow('critDamage', s.critDamage),
-    statRow('headshotDamage', s.headshotDamage),
-    statRow('damageToArmor', s.damageToArmor),
-    statRow('damageToHealth', s.damageToHealth),
-    statRow('damageToOutOfCover', s.damageToOutOfCover),
-    statRow('weaponHandling', s.weaponHandling)
+    row('weaponDamage'),
+    row('totalWeaponDamage'),
+    statRow('critChance', chc, {
+      bonus: chcPeak - chc,
+      capped: (s.critChance || 0) > cap,
+      label: 'Critical hit chance' + ((s.critChance || 0) > cap ? ' (capped)' : '')
+    }),
+    row('critDamage'),
+    row('headshotDamage'),
+    row('damageToArmor'),
+    row('damageToHealth'),
+    row('damageToOutOfCover'),
+    row('weaponHandling')
   ].join('');
 
   const weaponTypeRows = Object.keys(TYPE_DAMAGE_STAT)
-    .map((t) => ({ key: TYPE_DAMAGE_STAT[t], value: s[TYPE_DAMAGE_STAT[t]] || 0 }))
-    .filter((r) => r.value)
-    .map((r) => statRow(r.key, r.value)).join('');
+    .map((t) => TYPE_DAMAGE_STAT[t])
+    .filter((k) => (s[k] || 0) || (f[k] || 0))
+    .map((k) => row(k)).join('');
 
   const defense = [
-    statRow('armorFlat', ev.surv.armor, { label: 'Armor', flat: true }),
-    statRow('healthFlat', ev.surv.health, { label: 'Health', flat: true }),
-    statRow('armorFlat', ev.surv.ehp, { label: 'Effective HP', flat: true }),
-    statRow('armorRegen', s.armorRegen, { flat: true }),
-    statRow('armorOnKill', s.armorOnKill),
-    statRow('incomingRepairs', s.incomingRepairs),
-    statRow('hazardProtection', s.hazardProtection),
-    statRow('damageToElites', s.damageToElites)
+    statRow('armorFlat', ev.survFloor.armor, { label: 'Armor', flat: true, bonus: ev.surv.armor - ev.survFloor.armor }),
+    statRow('healthFlat', ev.survFloor.health, { label: 'Health', flat: true, bonus: ev.surv.health - ev.survFloor.health }),
+    statRow('armorFlat', ev.survFloor.ehp, { label: 'Effective HP', flat: true, bonus: ev.surv.ehp - ev.survFloor.ehp }),
+    statRow('armorRegen', ev.survFloor.regen, { label: 'Armor regen /s', flat: true, bonus: ev.surv.regen - ev.survFloor.regen }),
+    row('armorOnKill'),
+    row('incomingRepairs'),
+    row('hazardProtection'),
+    row('damageToElites')
   ].join('');
 
   const skills = [
     statRow('skillTier', ev.tier, { text: String(ev.tier) }),
     statRow('skillDamage', ev.skillDamageTotal, { label: 'Skill damage (with tiers)' }),
-    statRow('skillHaste', s.skillHaste),
-    statRow('skillRepair', s.skillRepair),
-    statRow('skillDuration', s.skillDuration),
-    statRow('statusEffects', s.statusEffects)
+    row('skillHaste'),
+    row('skillRepair'),
+    row('skillDuration'),
+    row('skillEfficiency'),
+    row('statusEffects')
   ].join('');
 
   const handling = [
-    statRow('reloadSpeed', s.reloadSpeed),
-    statRow('rateOfFire', s.rateOfFire),
-    statRow('magazineSizePct', s.magazineSizePct),
-    statRow('stability', s.stability),
-    statRow('accuracy', s.accuracy),
-    statRow('optimalRange', s.optimalRange)
+    row('reloadSpeed'), row('rateOfFire'), row('magazineSizePct'),
+    row('stability'), row('accuracy'), row('optimalRange')
   ].join('');
 
   document.getElementById('readout').innerHTML =
@@ -1337,7 +1423,9 @@ function renderReadout() {
     + ' procced; ceiling is every stacking talent at max. Expected sits at '
     + Math.round(ev.uptime * 100) + '% uptime — drag it in the scenario bar.</p>'
     + '</div></div>'
-    + '<div class="panel"><header><h2>Offense</h2></header><div class="statlist">' + offense
+    + '<div class="panel"><header><h2>Offense</h2><span class="spacer"></span>'
+    + '<span class="chip">resting <span class="proc">+procced</span></span></header>'
+    + '<div class="statlist">' + offense
     + (weaponTypeRows ? '<div class="srow group"><span class="eyebrow">By weapon type</span><span></span></div>'
       + weaponTypeRows : '') + '</div></div>'
     + '<div class="panel"><header><h2>Survivability</h2></header><div class="statlist">' + defense + '</div></div>'
@@ -1359,7 +1447,7 @@ const MATRIX_ROWS = [
   { key: 'ttk', label: 'Time to kill', get: (e) => e.ttk || 0, fmt: (v) => v ? v.toFixed(2) + 's' : '—', lowerBetter: true },
   { key: 'rpm', label: 'Effective RPM', get: (e) => e.lead && e.lead.dmg ? e.lead.dmg.rpm : 0, fmt: (v) => Math.round(v) },
   { key: 'mag', label: 'Magazine', get: (e) => e.lead && e.lead.dmg ? e.lead.dmg.mag : 0, fmt: (v) => Math.round(v) },
-  { section: 'Damage pools' },
+  { section: 'Damage pools (at peak)' },
   { key: 'awd', label: 'Weapon damage', get: (e) => lead(e).weaponDamage, fmt: pct },
   { key: 'twd', label: 'Total weapon damage', get: (e) => lead(e).totalWeaponDamage, fmt: pct },
   { key: 'chc', label: 'Critical hit chance', get: (e) => Math.min(lead(e).critChance, konst('critChanceCap')), fmt: pct },
@@ -1372,7 +1460,7 @@ const MATRIX_ROWS = [
   { key: 'armor', label: 'Armor', get: (e) => e.surv.armor, fmt: int },
   { key: 'health', label: 'Health', get: (e) => e.surv.health, fmt: int },
   { key: 'ehp', label: 'Effective HP', get: (e) => e.surv.ehp, fmt: int },
-  { key: 'regen', label: 'Armor regen /s', get: (e) => e.base.armorRegen, fmt: int },
+  { key: 'regen', label: 'Armor regen /s', get: (e) => e.surv.regen, fmt: int },
   { key: 'aok', label: 'Armor on kill', get: (e) => e.base.armorOnKill, fmt: pct },
   { key: 'hazard', label: 'Hazard protection', get: (e) => e.base.hazardProtection, fmt: pct },
   { section: 'Skills' },
@@ -1488,6 +1576,15 @@ function renderTables() {
       + Object.keys(D.constants).map((name) =>
         editRow('const:' + name, name.replace(/([A-Z])/g, ' $1').toLowerCase(), D.constants[name])).join('')
       + '</div>');
+  }
+  for (const [talentId, def] of Object.entries(D.dynamicTalents || {})) {
+    if (!hit(def.name) && !hit(def.item) && !hit('talent formula')) continue;
+    cards.push('<div class="edit-card"><h3>' + esc(def.name)
+      + ' <span class="dflt">' + esc(def.item) + '</span></h3>'
+      + Object.keys(def.params).map((k) => editRow('dyn:' + talentId + ':' + k,
+        k.replace(/([A-Z])/g, ' $1').toLowerCase(), def.params[k])).join('')
+      + '<p class="dflt" style="margin:6px 0 0">Hand-modelled: this talent reads your equipped'
+      + ' cores, so it is computed rather than stored as a flat bonus.</p></div>');
   }
   if (hit('gear slot layout attributes')) {
     cards.push('<div class="edit-card"><h3>Attribute lines per slot</h3>'

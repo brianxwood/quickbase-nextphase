@@ -434,6 +434,11 @@ label { font-size: 13px; color: var(--ink-mid); }
 }
 .row-label > .eyebrow { font-size: 10px; }
 .hint { font-size: 12px; color: var(--ink-dim); }
+.hint.computed {
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+  color: var(--ink-mid);
+}
 .talent-desc {
   font-size: 12.5px;
   color: var(--ink-mid);
@@ -590,6 +595,7 @@ label { font-size: 13px; color: var(--ink-mid); }
 }
 .statlist .srow.zero .sv { color: var(--ink-dim); }
 .statlist .srow.capped .sv { color: var(--warn); }
+.statlist .srow .proc, .chip .proc { color: var(--good); margin-left: .45em; font-size: .86em; }
 
 /* weapon cards */
 .wpn-figures {

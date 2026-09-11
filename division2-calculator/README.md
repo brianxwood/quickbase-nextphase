@@ -84,6 +84,32 @@ Each talent is classified from its own description: anything with a trigger or a
 flat talents such as "Increase reload speed by 30%" are always on and sit in the resting figure
 too. The classification is a text heuristic over the source descriptions, not a curated list.
 
+### Hand-modelled talents
+
+A few talents read the rest of your build, so no stored modifier can describe them. Those carry a
+written formula instead, and the slot card shows what it produces for the build you have.
+
+**Memento** (`gt_memento_kill`) is the first. Its short-term buff pays per equipped core, and its
+long-term buff stacks per trophy:
+
+```
+weapon damage      = redCores   x 5%  + stacks x 1%
+bonus armor        = blueCores  x 10%
+skill efficiency   = yellowCores x 5% + stacks x 1%
+armor regen (%/s)  =                    stacks x 0.1%
+```
+
+Cores are counted across the six gear slots, and a three-core piece counts as one of each — which
+is why Memento feeds itself one red, one blue and one yellow. On a five-weapon-damage-core build
+that is 6 red / 1 blue / 1 yellow, giving +60% weapon damage, +10% bonus armor, +35% skill
+efficiency and +3%/s armor regeneration at 30 trophies. Every number in that formula is editable
+under Tables.
+
+The whole talent is conditional, so it sits entirely in the gap between resting and peak.
+
+Percentage-based armour regeneration is a real stat now, applied against the armour pool after the
+pool is worked out, rather than being confused with the flat per-second attribute.
+
 ### Assumptions worth knowing
 - **Base health is 100,000**, used as the pool that percentage health bonuses multiply. It is an
   editable constant.
@@ -94,6 +120,8 @@ too. The classification is a text heuristic over the source descriptions, not a 
   quotes it (0.65% weapon damage per stack, 100 stacks), so it ships at +65%. A 4-piece set whose
   talent is still unmodelled is flagged in the brand and set bonus panel, and the value is editable
   in Tables like any other — set it and it feeds the peak figure immediately.
+- **The stat readout shows the resting sheet**, with anything a talent adds once it has procced
+  riding alongside as a green "+n" rather than folded into the total.
 - **Talent armour is flat, not proportional.** Talent modifiers encode armour the way a gear core
   does — Cold grants 5,000, Hardened 10,000 — so it is added to the pool rather than multiplying it.
   Every other talent modifier is a percentage.

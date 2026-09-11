@@ -455,6 +455,11 @@ function applyTalentModifiers(stats, talent, withConditional) {
   }
 }
 
+/* The NinjaBike Messenger Backpack's Resourceful counts as a piece of every set and brand you
+   already have at least one of, so three Striker pieces plus this backpack reach the 4-piece
+   bonus. It stacks into every active set at once, not just one. */
+const RESOURCEFUL_TALENT = 'gt_ninjabike_resource';
+
 /** Brand and gear-set counts across the six slots, plus which tiers are live. */
 function countSets(build) {
   const brands = {}, sets = {};
@@ -520,13 +525,18 @@ function gearStats(build, withConditional) {
   }
 
   const counts = countSets(build);
+  const resourceful = talentIds.has(RESOURCEFUL_TALENT);
+  /** an equipped set gains a piece from Resourceful; something you own none of does not */
+  const effective = (raw) => (raw > 0 && resourceful ? raw + 1 : raw);
   const activeBrands = [], activeSets = [];
-  for (const [name, n] of Object.entries(counts.brands)) {
+  for (const [name, raw] of Object.entries(counts.brands)) {
+    const n = effective(raw);
     const lines = brandLines(name);
     for (const line of lines) if (line.pieces <= n) add(stats, line.statType, line.value, 'pct');
-    activeBrands.push({ name, pieces: n, lines });
+    activeBrands.push({ name, pieces: n, worn: raw, boosted: n > raw, lines });
   }
-  for (const [name, n] of Object.entries(counts.sets)) {
+  for (const [name, raw] of Object.entries(counts.sets)) {
+    const n = effective(raw);
     const lines = setLines(name);
     const dynamicSet = DYNAMIC_SET_TALENTS[name];
     for (const line of lines) {
@@ -537,7 +547,7 @@ function gearStats(build, withConditional) {
     if (dynamicSet && n >= 4 && withConditional) applyBag(stats, dynamicSet.compute(ctx));
     const four = lines.filter((l) => l.pieces >= 4);
     activeSets.push({
-      name, pieces: n, lines,
+      name, pieces: n, worn: raw, boosted: n > raw, lines,
       talentName: (D.gearSets[name] || {}).talentName,
       talentDetail: dynamicSet && n >= 4 ? dynamicSet.describe(ctx) : null,
       // a 4-piece set whose headline talent is neither modelled nor given a value
@@ -1252,15 +1262,20 @@ function renderWeaponSlot(w, index, ev) {
 
 function renderBonuses(ev) {
   const blocks = [];
+  const pips = (count, worn, total) => '<span class="pips">'
+    + Array.from({ length: total }, (_, i) => '<span class="pip'
+      + (i < count ? ' on' : '') + (i >= worn && i < count ? ' boost' : '') + '"></span>').join('')
+    + '</span>';
+  const boostNote = '<span class="live">+1 piece from Resourceful</span>';
+
   for (const set of ev.base._sets) {
-    const pipCount = 4;
     blocks.push('<div class="bonus"><span class="bname">' + esc(set.name) + '</span>'
-      + '<span class="pips">' + Array.from({ length: pipCount }, (_, i) =>
-        '<span class="pip' + (i < set.pieces ? ' on' : '') + '"></span>').join('') + '</span>'
+      + pips(set.pieces, set.worn, 4)
       + '<span class="blines">'
       + set.lines.filter((l) => l.pieces < 4)
         .map((l) => '<span class="' + (l.pieces <= set.pieces ? 'live' : '') + '">'
           + l.pieces + '· ' + esc(statText(l.statType, l.value)) + '</span>').join('')
+      + (set.boosted ? boostNote : '')
       + (set.talentName
         ? '<span class="' + (set.pieces >= 4 && !set.talentUnmodelled ? 'live' : '') + '">4· '
           + esc(set.talentName)
@@ -1276,11 +1291,11 @@ function renderBonuses(ev) {
   }
   for (const brand of ev.base._brands) {
     blocks.push('<div class="bonus"><span class="bname">' + esc(brand.name) + '</span>'
-      + '<span class="pips">' + Array.from({ length: 3 }, (_, i) =>
-        '<span class="pip' + (i < brand.pieces ? ' on' : '') + '"></span>').join('') + '</span>'
+      + pips(Math.min(brand.pieces, 3), brand.worn, 3)
       + '<span class="blines">'
       + brand.lines.map((l) => '<span class="' + (l.pieces <= brand.pieces ? 'live' : '') + '">'
         + l.pieces + '· ' + esc(statText(l.statType, l.value)) + '</span>').join('')
+      + (brand.boosted ? boostNote : '')
       + '</span></div>');
   }
   if (!blocks.length) blocks.push('<p class="hint">No brand or gear set bonuses active yet.</p>');

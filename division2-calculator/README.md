@@ -28,6 +28,10 @@ whole app.
   secondary rolls, and the app models them that way rather than offering a core picker.
 - **Brand and gear set bonuses** — counted across the six slots, with 1/2/3-piece brand tiers and
   2/3/4-piece set tiers lighting up as pieces are added.
+- **Resourceful.** The NinjaBike Messenger Backpack counts as a piece of every set and brand you
+  already wear at least one of, simultaneously — three Striker pieces plus that backpack reach the
+  4-piece bonus, and two Unit Alloys reach the 3-piece at the same time. The supplied piece shows
+  as a green pip so it is distinguishable from one you are actually wearing.
 - **Weapons** — 3 slots: weapon, core attribute, two attributes, talent, attachments, expertise.
   The sidearm slot accepts pistols plus the shotguns the data marks sidearm-only (the Backup
   Boomstick); the two long-gun slots accept everything else. A saved loadout holding a weapon its

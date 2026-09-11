@@ -29,6 +29,9 @@ whole app.
 - **Brand and gear set bonuses** — counted across the six slots, with 1/2/3-piece brand tiers and
   2/3/4-piece set tiers lighting up as pieces are added.
 - **Weapons** — 3 slots: weapon, core attribute, two attributes, talent, attachments, expertise.
+  The sidearm slot accepts pistols plus the shotguns the data marks sidearm-only (the Backup
+  Boomstick); the two long-gun slots accept everything else. A saved loadout holding a weapon its
+  slot no longer accepts is cleared on load.
 - **Specialization** — all six, with per-perk tier allocation, point cost tracking and a cap on how
   many weapon archetypes can be boosted at once (three by default, editable).
 - **SHD watch** — point allocation across the four categories.

@@ -192,6 +192,11 @@ option {
   background-color: var(--panel);
   color: var(--ink);
 }
+/* Weapons are grouped by type, so quality rides on the option itself. Ordinary High-End stays
+   in plain ink — only the ones worth spotting are tinted. */
+option.q-exotic { color: var(--q-exotic); }
+option.q-named  { color: var(--q-named); }
+option.q-proto  { color: var(--q-proto); }
 
 select, input[type="text"], input[type="number"] {
   font-family: var(--f-body);

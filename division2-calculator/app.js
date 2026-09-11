@@ -73,6 +73,20 @@ for (const slot of SLOTS) GEAR_BY_SLOT[slot] = D.gearItems.filter((g) => g.slot 
 const WEAPONS_BY_TYPE = {};
 for (const w of D.weapons) (WEAPONS_BY_TYPE[w.type] = WEAPONS_BY_TYPE[w.type] || []).push(w);
 
+/* The sidearm slot takes pistols, plus the handful of shotguns the data marks sidearm-only
+   (the Backup Boomstick). The two long-gun slots take everything else. */
+const SIDEARM_SLOT = 2;
+const fitsSlot = (w, slotIndex) => (slotIndex === SIDEARM_SLOT
+  ? (w.type === 'Pistol' || !!w.sidearmOnly)
+  : (w.type !== 'Pistol' && !w.sidearmOnly));
+const weaponsForSlot = (slotIndex) => D.weapons.filter((w) => fitsSlot(w, slotIndex));
+
+/** Quality colour class, shared with the gear picker's groups. */
+const qualityOptionClass = (quality) => (
+  quality === 'Exotic' ? 'q-exotic'
+    : quality === 'Named' ? 'q-named'
+      : quality === 'Prototype' ? 'q-proto' : '');
+
 /* ------------------------------------------------- overrides over the tables */
 
 let overrides = {};
@@ -184,7 +198,7 @@ function normalizeBuild(b) {
   });
   (b.weapons || []).slice(0, 3).forEach((src, i) => {
     const w = out.weapons[i];
-    w.weaponId = WEAPONS[src.weaponId] ? src.weaponId : null;
+    w.weaponId = WEAPONS[src.weaponId] && fitsSlot(WEAPONS[src.weaponId], i) ? src.weaponId : null;
     w.coreId = src.coreId || null;
     w.coreValue = src.coreValue == null ? null : Number(src.coreValue);
     w.talentId = src.talentId || null;
@@ -771,7 +785,9 @@ function options(groups, selected, placeholder) {
   let html = placeholder === null ? ''
     : '<option value=""' + (selected ? '' : ' selected') + '>' + esc(placeholder || '— none —') + '</option>';
   const renderItems = (items) => items.map((it) =>
-    '<option value="' + esc(it.value) + '"' + (String(it.value) === String(selected) ? ' selected' : '') + '>'
+    '<option value="' + esc(it.value) + '"'
+    + (it.cls ? ' class="' + esc(it.cls) + '"' : '')
+    + (String(it.value) === String(selected) ? ' selected' : '') + '>'
     + esc(it.text) + '</option>').join('');
   if (Array.isArray(groups) && groups.length && groups[0] && groups[0].items) {
     html += groups.map((g) => g.items.length
@@ -969,11 +985,16 @@ function renderGearSlot(g, index) {
 
 function renderWeaponSlot(w, index, ev) {
   const def = weaponOf(w);
-  const groups = Object.keys(WEAPONS_BY_TYPE)
+  const pool = weaponsForSlot(index);
+  const byType = {};
+  for (const x of pool) (byType[x.type] = byType[x.type] || []).push(x);
+  const groups = Object.keys(byType)
     .map((type) => ({
       label: TYPE_LABEL[type] || type,
-      items: alpha(WEAPONS_BY_TYPE[type].map((x) => ({
-        value: x.id, text: x.name + (x.quality === 'High-End' ? '' : ' · ' + x.quality)
+      items: alpha(byType[type].map((x) => ({
+        value: x.id,
+        cls: qualityOptionClass(x.quality),
+        text: x.name + (x.quality === 'High-End' ? '' : ' · ' + x.quality)
       })))
     }))
     .sort((a, b) => a.label.localeCompare(b.label));

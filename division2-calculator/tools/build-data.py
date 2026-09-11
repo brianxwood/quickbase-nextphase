@@ -33,6 +33,17 @@ for spec in specs.values():
             fixed += 1
 assert fixed == 6, fixed
 
+# Striker's Battlegear carries both of its talents on "Backpack" upstream, leaving its chest
+# piece with none. Risk Management is the chest talent (corroborated by faildruid/division-2-db,
+# which lists it under Chest Talent), so re-slot it.
+restruck = 0
+for t in db['gearTalents']:
+    if t['id'] == 'gt_set_striker_bp_risk':
+        assert t['slot'] == 'Backpack' and t['gearSet'] == "Striker's Battlegear", t
+        t['slot'] = 'Chest'
+        restruck += 1
+assert restruck == 1, restruck
+
 out = {
     "dataVersion": "Sept 2026 tables",
     "weapons": db["weapons"],

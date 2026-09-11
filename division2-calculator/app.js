@@ -153,7 +153,7 @@ function normalizeBuild(b) {
     g.coreId = src.coreId || null;
     g.coreValue = src.coreValue == null ? null : Number(src.coreValue);
     g.expertise = Number(src.expertise) || 0;
-    g.talentId = src.talentId || null;
+    g.talentId = validTalentFor(g, src.talentId || null);
     (src.attrs || []).slice(0, 2).forEach((a, j) => {
       g.attrs[j] = { id: a && a.id ? a.id : null, value: a && a.value != null ? Number(a.value) : null };
     });
@@ -207,12 +207,53 @@ const coreChoicesFor = (g) => {
   }
   return D.gearCoreAttributes;
 };
+/** An exotic's talent is part of the item, whether the data flags it locked or just default. */
+function lockedTalentOf(item) {
+  if (!item || !item.hasTalent) return null;
+  if (item.lockedTalent) return item.lockedTalent;
+  if (item.quality === 'Exotic' && item.defaultTalent) return item.defaultTalent;
+  return null;
+}
+
+/* A gear set chest or backpack carries one of that set's own talents — the generic pool is not
+   available on it, and a set talent is never available on a brand piece. The upstream slot labels
+   have known gaps, so the whole set's pool is offered and the slot-matched one is the default. */
 function talentChoicesFor(g) {
   const item = itemOf(g);
   if (!item || !item.hasTalent) return [];
-  if (item.lockedTalent) return [GEAR_TALENTS[item.lockedTalent]].filter(Boolean);
-  return D.gearTalents.filter((t) =>
-    t.slot === g.slot && (!t.gearSet || t.gearSet === item.gearSet));
+  const locked = lockedTalentOf(item);
+  if (locked) return [GEAR_TALENTS[locked]].filter(Boolean);
+  if (item.quality === 'Prototype') {
+    const proto = D.gearTalents.filter((t) => t.slot === 'Prototype');
+    if (proto.length) return proto;
+  }
+  if (item.gearSet) {
+    const pool = D.gearTalents.filter((t) => t.gearSet === item.gearSet);
+    if (pool.length) return pool;
+  }
+  return D.gearTalents.filter((t) => t.slot === g.slot && !t.gearSet);
+}
+
+/** The talent a piece comes with; a set or exotic piece is never left blank. */
+function defaultTalentFor(g) {
+  const item = itemOf(g);
+  if (!item || !item.hasTalent) return null;
+  const locked = lockedTalentOf(item);
+  if (locked) return locked;
+  if (!item.gearSet) return null;
+  const pool = talentChoicesFor(g);
+  const match = pool.find((t) => t.slot === g.slot) || pool[0];
+  return match ? match.id : null;
+}
+
+/** Drop a talent that this piece could not actually roll. */
+function validTalentFor(g, talentId) {
+  const item = itemOf(g);
+  if (!item || !item.hasTalent) return null;
+  const locked = lockedTalentOf(item);
+  if (locked) return locked;
+  const allowed = talentChoicesFor(g).some((t) => t.id === talentId);
+  return allowed ? talentId : defaultTalentFor(g);
 }
 const weaponOf = (w) => (w.weaponId ? WEAPONS[w.weaponId] : null);
 function attachmentChoices(w, kind) {
@@ -293,8 +334,7 @@ function gearStats(build) {
       add(stats, def.statType, m.value == null ? capOf(def) : m.value, 'flat');
     }
     if (item.hasTalent) {
-      const talentId = item.lockedTalent || g.talentId;
-      applyTalentModifiers(stats, GEAR_TALENTS[talentId]);
+      applyTalentModifiers(stats, GEAR_TALENTS[lockedTalentOf(item) || g.talentId]);
     }
   }
 
@@ -491,7 +531,9 @@ function buildFromSpec(spec) {
     (row.mods || []).forEach((statType, j) => {
       if (j < modSlotCount(g)) g.mods[j] = { id: modIdFor(statType), value: null };
     });
-    if (item.hasTalent && row.talent && GEAR_TALENTS[row.talent]) g.talentId = row.talent;
+    if (item.hasTalent) {
+      g.talentId = row.talent && GEAR_TALENTS[row.talent] ? row.talent : defaultTalentFor(g);
+    }
   });
   (spec.weapons || []).forEach((row, i) => {
     const w = b.weapons[i];
@@ -515,8 +557,8 @@ const SEEDS = [
     shd: { weaponDamage: 50, critDamage: 50, headshotDamage: 50, critChance: 50 },
     gear: [
       { slot: 'Mask', set: "Striker's Battlegear", core: 'weaponDamage', attrs: ['critChance', 'critDamage'], mods: ['critDamage'] },
-      { slot: 'Chest', set: "Striker's Battlegear", core: 'weaponDamage', attrs: ['critDamage', 'weaponHandling'], mods: ['critDamage'], talent: 'gt_obliterate' },
-      { slot: 'Backpack', set: "Striker's Battlegear", core: 'weaponDamage', attrs: ['critChance', 'critDamage'], mods: ['critChance'], talent: 'gt_vigilance' },
+      { slot: 'Chest', set: "Striker's Battlegear", core: 'weaponDamage', attrs: ['critDamage', 'weaponHandling'], mods: ['critDamage'] },
+      { slot: 'Backpack', set: "Striker's Battlegear", core: 'weaponDamage', attrs: ['critChance', 'critDamage'], mods: ['critChance'] },
       { slot: 'Gloves', set: "Striker's Battlegear", core: 'weaponDamage', attrs: ['critChance', 'critDamage'] },
       { slot: 'Holster', brand: 'Providence Defense', core: 'weaponDamage', attrs: ['critChance', 'critDamage'] },
       { slot: 'Kneepads', brand: 'Providence Defense', core: 'weaponDamage', attrs: ['critDamage', 'headshotDamage'] }
@@ -531,8 +573,8 @@ const SEEDS = [
     shd: { weaponDamage: 50, critDamage: 50, critChance: 50, magazineSizePct: 50 },
     gear: [
       { slot: 'Mask', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critChance', 'critDamage'], mods: ['critDamage'] },
-      { slot: 'Chest', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critDamage', 'weaponHandling'], mods: ['critDamage'], talent: 'gt_obliterate' },
-      { slot: 'Backpack', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critChance', 'critDamage'], mods: ['critChance'], talent: 'gt_vigilance' },
+      { slot: 'Chest', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critDamage', 'weaponHandling'], mods: ['critDamage'] },
+      { slot: 'Backpack', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critChance', 'critDamage'], mods: ['critChance'] },
       { slot: 'Gloves', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critChance', 'critDamage'] },
       { slot: 'Holster', brand: 'Petrov Defense Group', core: 'weaponDamage', attrs: ['critChance', 'critDamage'] },
       { slot: 'Kneepads', brand: 'Petrov Defense Group', core: 'armor', attrs: ['critDamage', 'hazardProtection'] }
@@ -548,8 +590,8 @@ const SEEDS = [
     shd: { skillDamage: 50, skillHaste: 50, armor: 50, skillDuration: 50 },
     gear: [
       { slot: 'Mask', set: 'Eclipse Protocol', core: 'skillTier', attrs: ['skillDamage', 'statusEffects'], mods: ['skillHaste'] },
-      { slot: 'Chest', set: 'Eclipse Protocol', core: 'skillTier', attrs: ['skillDamage', 'skillHaste'], mods: ['skillHaste'], talent: 'gt_set_eclipse_chest' },
-      { slot: 'Backpack', set: 'Eclipse Protocol', core: 'skillTier', attrs: ['skillDamage', 'statusEffects'], mods: ['skillHaste'], talent: 'gt_set_eclipse_bp' },
+      { slot: 'Chest', set: 'Eclipse Protocol', core: 'skillTier', attrs: ['skillDamage', 'skillHaste'], mods: ['skillHaste'] },
+      { slot: 'Backpack', set: 'Eclipse Protocol', core: 'skillTier', attrs: ['skillDamage', 'statusEffects'], mods: ['skillHaste'] },
       { slot: 'Gloves', set: 'Eclipse Protocol', core: 'skillTier', attrs: ['skillHaste', 'hazardProtection'] },
       { slot: 'Holster', brand: 'Wyvern Wear', core: 'skillTier', attrs: ['skillHaste', 'statusEffects'] },
       { slot: 'Kneepads', brand: 'Wyvern Wear', core: 'armor', attrs: ['statusEffects', 'hazardProtection'] }
@@ -662,7 +704,8 @@ const statText = (statType, value) => {
 
 /** Option list builder; `groups` is [{label, items:[{value,text,disabled}]}] or a flat item list. */
 function options(groups, selected, placeholder) {
-  let html = '<option value=""' + (selected ? '' : ' selected') + '>' + esc(placeholder || '— none —') + '</option>';
+  let html = placeholder === null ? ''
+    : '<option value=""' + (selected ? '' : ' selected') + '>' + esc(placeholder || '— none —') + '</option>';
   const renderItems = (items) => items.map((it) =>
     '<option value="' + esc(it.value) + '"' + (String(it.value) === String(selected) ? ' selected' : '') + '>'
     + esc(it.text) + '</option>').join('');
@@ -813,13 +856,19 @@ function renderGearSlot(g, index) {
 
     if (item.hasTalent) {
       const choices = talentChoicesFor(g);
-      const chosen = item.lockedTalent || g.talentId;
+      const locked = lockedTalentOf(item);
+      const chosen = locked || g.talentId;
       const talent = GEAR_TALENTS[chosen];
+      const fixedToSet = !!item.gearSet && !locked;
       rows.push('<div class="row-label"><span class="eyebrow">Talent</span>'
-        + '<select data-gear="' + index + '" data-field="talentId"' + (item.lockedTalent ? ' disabled' : '')
+        + '<select data-gear="' + index + '" data-field="talentId"' + (locked ? ' disabled' : '')
         + ' aria-label="Talent">'
-        + options(choices.map((t) => ({ value: t.id, text: t.name })), chosen, '— no talent —') + '</select>'
+        + options(choices.map((t) => ({ value: t.id, text: t.name })), chosen,
+          fixedToSet || locked ? null : '— no talent —') + '</select>'
         + '</div>');
+      if (fixedToSet) {
+        rows.push('<p class="hint">Set piece — only ' + esc(item.gearSet) + ' talents roll here.</p>');
+      }
       if (talent) rows.push('<p class="talent-desc">' + richText(talent.description) + '</p>');
     }
 
@@ -1149,7 +1198,7 @@ function talentNames(build) {
   const pick = (slot) => {
     const g = build.gear[SLOTS.indexOf(slot)];
     const item = itemOf(g);
-    const t = GEAR_TALENTS[(item && item.lockedTalent) || (g && g.talentId)];
+    const t = GEAR_TALENTS[lockedTalentOf(item) || (g && g.talentId)];
     return t ? t.name : '—';
   };
   return pick('Chest') + ' / ' + pick('Backpack');
@@ -1381,6 +1430,7 @@ function onEditorInput(e) {
       g.talentId = null;
       g.attrs = [{ id: null, value: null }, { id: null, value: null }];
       g.mods = [{ id: null, value: null }, { id: null, value: null }];
+      g.talentId = defaultTalentFor(g);
       const cores = coreChoicesFor(g);
       g.coreId = item && item.lockedCore ? (cores[0] ? cores[0].id : null) : g.coreId;
       if (g.coreId && !cores.some((c) => c.id === g.coreId)) g.coreId = cores[0] ? cores[0].id : null;

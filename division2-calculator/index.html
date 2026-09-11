@@ -554,7 +554,8 @@ label { font-size: 13px; color: var(--ink-mid); }
 /* weapon cards */
 .wpn-figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  /* six figures, deliberately 3 x 2 — auto-fit packed them 4 + 2 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   background: var(--line-soft);
   border: 1px solid var(--line-soft);

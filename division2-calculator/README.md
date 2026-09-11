@@ -41,6 +41,9 @@ whole app.
   The sidearm slot accepts pistols plus the shotguns the data marks sidearm-only (the Backup
   Boomstick); the two long-gun slots accept everything else. A saved loadout holding a weapon its
   slot no longer accepts is cleared on load.
+- **Exotic weapons carry their mods.** All 43 have a fixed set welded in per slot — Chameleon is
+  +15% crit chance, +20% accuracy, +10% stability and +20% magazine size — so they are shown as
+  read-only rows instead of pickers and counted in the stats.
 - **Specialization** — all six, with per-perk tier allocation, point cost tracking and a cap on how
   many weapon archetypes can be boosted at once (three by default, editable).
 - **SHD watch** — point allocation across the four categories.

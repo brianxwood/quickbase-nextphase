@@ -85,6 +85,13 @@ for kind, mods in db["attachments"].items():
         if "magazineSize" in m:
             m["magazineSizePct"] = m.pop("magazineSize")
 
+# An exotic's built-in mods use the same magazine key for a percentage. Its reload figure really
+# is a percentage here (10, 20) rather than the seconds the attachment table uses, so leave it.
+for weapon in db["weapons"]:
+    for slot, mods in (weapon.get("exoticMods") or {}).items():
+        if "magazineSize" in mods:
+            mods["magazineSizePct"] = mods.pop("magazineSize")
+
 # A weapon's core attribute is its own weapon-type damage, fixed by the weapon — an AR reads
 # "Assault Rifle Damage +15%". The source instead modelled Damage to Armor / Damage to Health /
 # Critical Hit Chance as selectable cores; the weapons that do carry weaponCoreAttrs disagree,

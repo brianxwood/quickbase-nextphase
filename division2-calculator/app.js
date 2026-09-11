@@ -55,7 +55,8 @@ const STAT_LABEL = {
   skillRepair: 'Skill repair', skillDuration: 'Skill duration', statusEffects: 'Status effects',
   skillEfficiency: 'Skill efficiency', skillHealth: 'Skill health', shieldHealth: 'Shield health',
   burnDamage: 'Burn damage', burnDuration: 'Burn duration', bleedDamage: 'Bleed damage',
-  reloadSeconds: 'Reload time', stability: 'Stability', accuracy: 'Accuracy',
+  reloadSeconds: 'Reload time', meleeDamage: 'Melee damage',
+  stability: 'Stability', accuracy: 'Accuracy',
   optimalRange: 'Optimal range',
   reloadSpeed: 'Reload speed', rateOfFire: 'Rate of fire', magazineSizePct: 'Magazine size',
   magazineSize: 'Magazine size', swapSpeed: 'Swap speed', ammoCapacity: 'Ammo capacity',
@@ -335,7 +336,8 @@ function normalizeBuild(b) {
     w.coreValue = src.coreValue == null ? null : Number(src.coreValue);
     w.talentId = validWeaponTalent(w, src.talentId || null);
     w.expertise = Number(src.expertise) || 0;
-    w.attachments = (src.attachments && typeof src.attachments === 'object') ? src.attachments : {};
+    w.attachments = (!builtInModsOf(WEAPONS[w.weaponId])
+      && src.attachments && typeof src.attachments === 'object') ? src.attachments : {};
     (src.attrs || []).slice(0, 2).forEach((a, j) => {
       w.attrs[j] = { id: a && a.id ? a.id : null, value: a && a.value != null ? Number(a.value) : null };
     });
@@ -428,9 +430,14 @@ function validTalentFor(g, talentId) {
   return allowed ? talentId : defaultTalentFor(g);
 }
 const weaponOf = (w) => (w.weaponId ? WEAPONS[w.weaponId] : null);
+/** An exotic's mods are welded in: fixed per slot, not chosen. */
+const builtInModsOf = (def) => (def && def.exoticMods && Object.keys(def.exoticMods).length
+  ? def.exoticMods : null);
+
 function attachmentChoices(w, kind) {
   const def = weaponOf(w);
-  if (!def || (def.supportedSlots || []).indexOf(kind) < 0) return [];
+  if (!def || builtInModsOf(def)) return [];
+  if ((def.supportedSlots || []).indexOf(kind) < 0) return [];
   return (D.attachments[kind] || []).filter((a) =>
     !a.weaponTypes || a.weaponTypes.indexOf(def.type) >= 0);
 }
@@ -639,11 +646,18 @@ function statsForWeapon(base, build, index, withConditional) {
     if (!adef) continue;
     add(stats, adef.statType, a.value == null ? capOf(adef) : a.value, 'pct');
   }
-  for (const kind of ATTACHMENT_KINDS) {
-    const att = ATTACHMENTS[w.attachments[kind]];
-    if (!att) continue;
-    for (const [statType, value] of Object.entries(attachmentMods(att))) {
-      add(stats, statType, value, 'pct');
+  const builtIn = builtInModsOf(def);
+  if (builtIn) {
+    for (const mods of Object.values(builtIn)) {
+      for (const [statType, value] of Object.entries(mods)) add(stats, statType, value, 'pct');
+    }
+  } else {
+    for (const kind of ATTACHMENT_KINDS) {
+      const att = ATTACHMENTS[w.attachments[kind]];
+      if (!att) continue;
+      for (const [statType, value] of Object.entries(attachmentMods(att))) {
+        add(stats, statType, value, 'pct');
+      }
     }
   }
   applyTalentModifiers(stats, WEAPON_TALENTS[lockedWeaponTalentOf(def) || w.talentId], withConditional);
@@ -976,7 +990,7 @@ const SHORT_STAT = {
   swapSpeed: 'swap speed', weaponHandling: 'handling', damageToElites: 'vs elites',
   damageToArmor: 'vs armor', damageToHealth: 'vs health', damageToOutOfCover: 'vs out of cover',
   ammoCapacity: 'ammo capacity', skillDamage: 'skill dmg', skillHaste: 'skill haste',
-  reloadSeconds: 'reload time'
+  reloadSeconds: 'reload time', meleeDamage: 'melee damage'
 };
 
 /** "+5% crit damage, -20% optimal range" — the non-zero part of a modifier bag. */
@@ -1282,6 +1296,18 @@ function renderWeaponSlot(w, index, ev) {
     }
     if (talent) rows.push('<p class="talent-desc">' + richText(talent.description) + '</p>');
 
+    const builtInMods = builtInModsOf(def);
+    if (builtInMods) {
+      for (const kind of ATTACHMENT_KINDS) {
+        const mods = builtInMods[kind];
+        if (!mods) continue;
+        rows.push('<div class="row-label"><span class="eyebrow">' + kind + '</span>'
+          + '<input type="text" class="locked-field" value="'
+          + esc(modifierSummary(mods) || 'no bonus') + '" disabled aria-label="'
+          + kind + ' (built in)"></div>');
+      }
+      rows.push('<p class="hint">Mods are built into this exotic and cannot be swapped.</p>');
+    }
     for (const kind of ATTACHMENT_KINDS) {
       const choices = attachmentChoices(w, kind);
       if (!choices.length) continue;

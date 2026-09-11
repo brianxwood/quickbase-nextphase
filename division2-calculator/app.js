@@ -357,6 +357,10 @@ const pieceArmor = (g) => {
 const fixedAttrsOf = (g) => (itemOf(g) || {}).fixedAttributes || [];
 
 const slotAttrLines = (slot) => Number(ov('slotattrs:' + slot, D.slotAttributeSlots[slot] || 2));
+/* A gear set piece buys its set bonus with a supporting attribute, so it rolls fewer than the
+   brand piece in the same slot. */
+const setSlotAttrLines = (slot) =>
+  Number(ov('setattrs:' + slot, (D.gearSetAttributeSlots || {})[slot] || 1));
 
 /** Exotics spend their attribute lines on fixed rolls; what is left is editable. */
 function attrSlotCount(g) {
@@ -364,7 +368,8 @@ function attrSlotCount(g) {
   if (!item) return 0;
   if (item.allCores) return 0;
   if (item.maxAttributes != null) return item.maxAttributes;
-  return Math.max(0, slotAttrLines(g.slot) - fixedAttrsOf(g).length);
+  const lines = item.gearSet ? setSlotAttrLines(g.slot) : slotAttrLines(g.slot);
+  return Math.max(0, lines - fixedAttrsOf(g).length);
 }
 
 /** Memento, NinjaBike, Harrier Pride and the Core Strength backpack carry all three cores. */
@@ -1781,8 +1786,13 @@ function renderTables() {
   if (hit('gear slot layout attributes')) {
     cards.push('<div class="edit-card"><h3>Attribute lines per slot</h3>'
       + SLOTS.map((slot) => editRow('slotattrs:' + slot, slot, D.slotAttributeSlots[slot])).join('')
-      + '<p class="dflt" style="margin:6px 0 0">Secondary rolls on top of the core. Mod slots come'
-      + ' from each item, not from here.</p></div>');
+      + '<p class="dflt" style="margin:6px 0 0">Brand, named and exotic pieces. Secondary rolls on'
+      + ' top of the core; mod slots come from each item, not from here.</p></div>');
+    cards.push('<div class="edit-card"><h3>Attribute lines per slot — gear sets</h3>'
+      + SLOTS.map((slot) => editRow('setattrs:' + slot, slot,
+        (D.gearSetAttributeSlots || {})[slot])).join('')
+      + '<p class="dflt" style="margin:6px 0 0">A gear set piece trades a supporting attribute for'
+      + ' the set bonus. Some sources give one in every slot, chest and backpack included.</p></div>');
   }
   if (hit('shd watch')) {
     cards.push('<div class="edit-card"><h3>SHD watch per point</h3>'

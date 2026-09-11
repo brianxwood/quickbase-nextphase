@@ -140,6 +140,12 @@ out = {
     # Kneepads the same). Mod slots are per item and come from the item data, not from here.
     "slotAttributeSlots": {"Mask": 2, "Chest": 2, "Backpack": 2,
                            "Gloves": 2, "Holster": 2, "Kneepads": 2},
+    # A gear set piece trades a supporting attribute for the set bonus. Community sources say a
+    # gear set piece carries one supporting attribute in every slot; the chest and backpack are
+    # left at two here because they also carry a talent and are reported that way in play. Both
+    # tables are editable in the app, so this is a starting point rather than a ruling.
+    "gearSetAttributeSlots": {"Mask": 1, "Chest": 2, "Backpack": 2,
+                              "Gloves": 1, "Holster": 1, "Kneepads": 1},
     "shd": {
         "maxPerStat": 50,
         "bonusPerPoint": {"weaponDamage": 0.2, "headshotDamage": 0.4, "critDamage": 0.4,

@@ -23,9 +23,11 @@ whole app.
   Weapons work the same way: an exotic or named weapon carries its talent (Chameleon has Chameleon,
   Kingbreaker has Perfect Flatline), and a plain High-End rolls from the 54 talents that are neither
   exotic nor a Perfect version — those arrive attached to an item and are never rolled.
-- **Slot layout.** Every slot carries one core attribute and two secondary attributes. Mod slots
-  come from the item: Mask, Chest and Backpack have one, Gloves, Holster and Kneepads none. Chest
-  and Backpack are the talent-bearing slots. The attribute count is an editable table (see below).
+- **Slot layout.** A brand, named or exotic piece carries one core attribute and two secondary
+  attributes. A **gear set piece trades a supporting attribute for the set bonus**, so it rolls one
+  in the mask, gloves, holster and kneepads. Mod slots come from the item: Mask, Chest and Backpack
+  have one, Gloves, Holster and Kneepads none. Chest and Backpack are the talent-bearing slots.
+  Both attribute counts are editable tables (see below).
 - **Three-core backpacks.** Memento, NinjaBike Messenger Backpack, Harrier Pride and the Core
   Strength backpack grant Weapon Damage, Armor *and* Skill Tier instead of a core plus two
   secondary rolls, and the app models them that way rather than offering a core picker.
@@ -238,7 +240,13 @@ applied to the source data:
    caps, so they move into the weapon attribute pool rather than being dropped, taking the larger
    cap where they clash with an entry already there.
 
-The per-slot attribute count is taken as two everywhere. The fixed rolls on exotics are the evidence:
+The per-slot attribute count is taken as two for brand, named and exotic pieces, and one for a
+gear set piece in the mask, gloves, holster and kneepads. Community sources say a gear set piece
+carries only one supporting attribute in **every** slot, chest and backpack included; those two are
+left at two here because they also carry a talent and are reported that way in play. Both tables
+are editable, so that is a starting point rather than a ruling.
+
+For non-set pieces the count is two everywhere. The fixed rolls on exotics are the evidence:
 Coyote's Mask is 6% critical hit chance plus 12% critical hit damage, and the Waveform holster and
 Acosta's Kneepads carry the same pair, so those slots hold two attribute lines rather than one. If
 your reading of a slot differs, change it in the Tables view — nothing is hard-coded.

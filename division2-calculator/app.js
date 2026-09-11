@@ -36,7 +36,7 @@ const STAT_LABEL = {
   rifleDamage: 'Rifle damage', mmrDamage: 'Marksman rifle damage',
   shotgunDamage: 'Shotgun damage', pistolDamage: 'Pistol damage',
   armorFlat: 'Armor (flat)', armorPct: 'Total armor', healthFlat: 'Health (flat)',
-  healthPct: 'Total health', armorRegen: 'Armor regeneration',
+  healthPct: 'Total health', bonusArmorPct: 'Bonus armor', armorRegen: 'Armor regeneration',
   armorRegenPct: 'Armor regeneration (% of pool)', armorOnKill: 'Armor on kill',
   incomingRepairs: 'Incoming repairs', hazardProtection: 'Hazard protection',
   explosiveRes: 'Explosive resistance', pulseResistance: 'Pulse resistance',
@@ -102,6 +102,61 @@ const dynParam = (talentId, key) => {
   return Number(ov('dyn:' + talentId + ':' + key, dflt)) || 0;
 };
 
+const dynSetParam = (setName, key) => {
+  const def = (D.dynamicSetTalents || {})[setName];
+  const dflt = def && def.params ? def.params[key] : 0;
+  return Number(ov('dynset:' + setName + ':' + key, dflt)) || 0;
+};
+
+/* A set's 4-piece talent whose chest and backpack talents rewrite the maths rather than adding a
+   flat bonus. The amplifiers' own stored modifiers are placeholders, so they are ignored here. */
+const DYNAMIC_SET_TALENTS = {
+  "Striker's Battlegear": {
+    compute(ctx) {
+      const p = (k) => dynSetParam("Striker's Battlegear", k);
+      const amp = D.dynamicSetTalents["Striker's Battlegear"].amplifiers;
+      const stacks = ctx.talentIds.has(amp.backpack) ? p('backpackMaxStacks') : p('maxStacks');
+      const per = ctx.talentIds.has(amp.chest) ? p('chestPerStackWeaponDamage') : p('perStackWeaponDamage');
+      return { weaponDamage: stacks * per, _stacks: 0 };
+    },
+    describe(ctx) {
+      const p = (k) => dynSetParam("Striker's Battlegear", k);
+      const amp = D.dynamicSetTalents["Striker's Battlegear"].amplifiers;
+      const stacks = ctx.talentIds.has(amp.backpack) ? p('backpackMaxStacks') : p('maxStacks');
+      const per = ctx.talentIds.has(amp.chest) ? p('chestPerStackWeaponDamage') : p('perStackWeaponDamage');
+      return stacks + ' stacks × ' + per + '% = +' + round2(stacks * per) + '% weapon damage';
+    }
+  },
+  Heartbreaker: {
+    compute(ctx) {
+      const p = (k) => dynSetParam('Heartbreaker', k);
+      const amp = D.dynamicSetTalents.Heartbreaker.amplifiers;
+      const stacks = ctx.talentIds.has(amp.chest) ? p('chestMaxStacks') : p('maxStacks');
+      const armorPer = ctx.talentIds.has(amp.backpack)
+        ? p('backpackPerStackBonusArmor') : p('perStackBonusArmor');
+      return { weaponDamage: stacks * p('perStackWeaponDamage'), bonusArmorPct: stacks * armorPer };
+    },
+    describe(ctx) {
+      const p = (k) => dynSetParam('Heartbreaker', k);
+      const amp = D.dynamicSetTalents.Heartbreaker.amplifiers;
+      const stacks = ctx.talentIds.has(amp.chest) ? p('chestMaxStacks') : p('maxStacks');
+      const armorPer = ctx.talentIds.has(amp.backpack)
+        ? p('backpackPerStackBonusArmor') : p('perStackBonusArmor');
+      return stacks + ' stacks × ' + p('perStackWeaponDamage') + '% = +'
+        + round2(stacks * p('perStackWeaponDamage')) + '% weapon damage vs pulsed, and × '
+        + armorPer + '% = +' + round2(stacks * armorPer) + '% bonus armor';
+    }
+  }
+};
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/** Every amplifier talent id belonging to a hand-modelled set. */
+const AMPLIFIER_IDS = new Set(
+  Object.values(D.dynamicSetTalents || {})
+    .flatMap((def) => Object.values(def.amplifiers || {}))
+);
+
 /** Red / blue / yellow cores across the six gear slots; a three-core piece counts as one of each. */
 function coreCounts(build) {
   const counts = { weaponDamage: 0, armor: 0, skillTier: 0 };
@@ -129,7 +184,7 @@ const DYNAMIC_TALENTS = {
       return {
         weaponDamage: ctx.cores.weaponDamage * p('redWeaponDamage')
           + stacks * p('stackWeaponDamage'),
-        armorPct: ctx.cores.armor * p('blueBonusArmor'),
+        bonusArmorPct: ctx.cores.armor * p('blueBonusArmor'),
         skillEfficiency: ctx.cores.skillTier * p('yellowSkillEfficiency')
           + stacks * p('stackSkillEfficiency'),
         armorRegenPct: stacks * p('stackArmorRegenPct')
@@ -141,7 +196,7 @@ const DYNAMIC_TALENTS = {
       const bag = DYNAMIC_TALENTS.gt_memento_kill.compute(ctx);
       return 'Your cores: ' + c.weaponDamage + ' red · ' + c.armor + ' blue · ' + c.skillTier
         + ' yellow. At ' + p('maxStacks') + ' trophies that is +' + bag.weaponDamage
-        + '% weapon damage, +' + bag.armorPct + '% bonus armor, +' + bag.skillEfficiency
+        + '% weapon damage, +' + bag.bonusArmorPct + '% bonus armor, +' + bag.skillEfficiency
         + '% skill efficiency and +' + bag.armorRegenPct.toFixed(1) + '% armor regen per second.';
     }
   }
@@ -415,7 +470,14 @@ function countSets(build) {
 /** Everything the gear, brands, sets, specialization and watch contribute. */
 function gearStats(build, withConditional) {
   const stats = blankStats();
-  const ctx = { cores: coreCounts(build), build };
+  const talentIds = new Set();
+  for (const g of build.gear) {
+    const item = itemOf(g);
+    if (!item || !item.hasTalent) continue;
+    const id = lockedTalentOf(item) || g.talentId;
+    if (id) talentIds.add(id);
+  }
+  const ctx = { cores: coreCounts(build), talentIds, build };
 
   for (const g of build.gear) {
     const item = itemOf(g);
@@ -451,7 +513,7 @@ function gearStats(build, withConditional) {
       const dynamic = DYNAMIC_TALENTS[talentId];
       if (dynamic) {
         if (withConditional || !dynamic.conditional) applyBag(stats, dynamic.compute(ctx));
-      } else {
+      } else if (!AMPLIFIER_IDS.has(talentId)) {
         applyTalentModifiers(stats, GEAR_TALENTS[talentId], withConditional);
       }
     }
@@ -466,17 +528,20 @@ function gearStats(build, withConditional) {
   }
   for (const [name, n] of Object.entries(counts.sets)) {
     const lines = setLines(name);
+    const dynamicSet = DYNAMIC_SET_TALENTS[name];
     for (const line of lines) {
       if (line.pieces > n) continue;
-      if (line.pieces >= 4 && !withConditional) continue;
+      if (line.pieces >= 4 && (!withConditional || dynamicSet)) continue;
       add(stats, line.statType, line.value, 'pct');
     }
+    if (dynamicSet && n >= 4 && withConditional) applyBag(stats, dynamicSet.compute(ctx));
     const four = lines.filter((l) => l.pieces >= 4);
     activeSets.push({
       name, pieces: n, lines,
       talentName: (D.gearSets[name] || {}).talentName,
-      // a 4-piece set whose headline talent is still a zero placeholder
-      talentUnmodelled: n >= 4 && (!four.length || four.every((l) => !l.value))
+      talentDetail: dynamicSet && n >= 4 ? dynamicSet.describe(ctx) : null,
+      // a 4-piece set whose headline talent is neither modelled nor given a value
+      talentUnmodelled: n >= 4 && !dynamicSet && (!four.length || four.every((l) => !l.value))
     });
   }
   activeBrands.sort((a, b) => b.pieces - a.pieces || a.name.localeCompare(b.name));
@@ -541,11 +606,14 @@ function skillTierOf(stats) {
   return Math.max(0, Math.min(konst('skillTierMax'), Math.floor(stats.skillTier || 0)));
 }
 
+/* Bonus armour is an overshield the build accrues, not part of the armour pool, so it is tracked
+   separately and only joins the total once. Armour regeneration scales off the pool itself. */
 function survivability(stats) {
   const armor = stats.armorFlat * (1 + stats.armorPct / 100);
+  const bonusArmor = armor * ((stats.bonusArmorPct || 0) / 100);
   const health = konst('baseHealth') * (1 + stats.healthPct / 100) + stats.healthFlat;
   const regen = (stats.armorRegen || 0) + armor * ((stats.armorRegenPct || 0) / 100);
-  return { armor, health, ehp: armor + health, regen };
+  return { armor, bonusArmor, health, ehp: armor + bonusArmor + health, regen };
 }
 
 /* The Division 2 per-shot damage is a product of separate buckets. Headshot and critical
@@ -1198,8 +1266,10 @@ function renderBonuses(ev) {
           + esc(set.talentName)
           + (set.talentUnmodelled
             ? ' <em>— not modelled</em>'
-            : set.lines.filter((l) => l.pieces >= 4 && l.value)
-              .map((l) => ' · ' + esc(statText(l.statType, l.value))).join(''))
+            : set.talentDetail
+              ? '</span><span class="live detail">' + esc(set.talentDetail)
+              : set.lines.filter((l) => l.pieces >= 4 && l.value)
+                .map((l) => ' · ' + esc(statText(l.statType, l.value))).join(''))
           + '</span>'
         : '')
       + '</span></div>');
@@ -1393,6 +1463,7 @@ function renderReadout() {
 
   const defense = [
     statRow('armorFlat', ev.survFloor.armor, { label: 'Armor', flat: true, bonus: ev.surv.armor - ev.survFloor.armor }),
+    statRow('bonusArmorPct', ev.survFloor.bonusArmor, { label: 'Bonus armor', flat: true, bonus: ev.surv.bonusArmor - ev.survFloor.bonusArmor }),
     statRow('healthFlat', ev.survFloor.health, { label: 'Health', flat: true, bonus: ev.surv.health - ev.survFloor.health }),
     statRow('armorFlat', ev.survFloor.ehp, { label: 'Effective HP', flat: true, bonus: ev.surv.ehp - ev.survFloor.ehp }),
     statRow('armorRegen', ev.survFloor.regen, { label: 'Armor regen /s', flat: true, bonus: ev.surv.regen - ev.survFloor.regen }),
@@ -1459,6 +1530,7 @@ const MATRIX_ROWS = [
   { section: 'Survivability' },
   { key: 'armor', label: 'Armor', get: (e) => e.surv.armor, fmt: int },
   { key: 'health', label: 'Health', get: (e) => e.surv.health, fmt: int },
+  { key: 'bonusArmor', label: 'Bonus armor (at peak)', get: (e) => e.surv.bonusArmor, fmt: int },
   { key: 'ehp', label: 'Effective HP', get: (e) => e.surv.ehp, fmt: int },
   { key: 'regen', label: 'Armor regen /s', get: (e) => e.surv.regen, fmt: int },
   { key: 'aok', label: 'Armor on kill', get: (e) => e.base.armorOnKill, fmt: pct },
@@ -1576,6 +1648,16 @@ function renderTables() {
       + Object.keys(D.constants).map((name) =>
         editRow('const:' + name, name.replace(/([A-Z])/g, ' $1').toLowerCase(), D.constants[name])).join('')
       + '</div>');
+  }
+  for (const [setName, def] of Object.entries(D.dynamicSetTalents || {})) {
+    if (!hit(setName) && !hit(def.talent) && !hit('talent formula')) continue;
+    cards.push('<div class="edit-card"><h3>' + esc(def.talent)
+      + ' <span class="dflt">' + esc(setName) + '</span></h3>'
+      + Object.keys(def.params).map((k) => editRow('dynset:' + setName + ':' + k,
+        k.replace(/([A-Z])/g, ' $1').toLowerCase(), def.params[k])).join('')
+      + '<p class="dflt" style="margin:6px 0 0">Hand-modelled: ' + esc(def.note)
+      + '. The set\'s chest and backpack talents change these numbers rather than adding'
+      + ' a bonus of their own.</p></div>');
   }
   for (const [talentId, def] of Object.entries(D.dynamicTalents || {})) {
     if (!hit(def.name) && !hit(def.item) && !hit('talent formula')) continue;

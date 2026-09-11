@@ -81,11 +81,8 @@ for key in ("gearTalents", "weaponTalents"):
         conditional_counts[key][0 if cond else 1] += 1
 
 # Every gear set's 4-piece talent is stored as a zero-valued placeholder, so the headline set
-# bonus contributes nothing. Striker's Gamble is recoverable from the set's own talent text:
-# Risk Management reads "increases total weapon damage gained per stack ... from 0.65%" and
-# Press the Advantage reads "increases max stacks ... from 100", so 100 x 0.65% = 65%.
-# The rest stay at zero and are flagged in the app until someone fills them in.
-db["gearSets"]["Striker's Battlegear"]["bonuses"]["4"] = {"statType": "weaponDamage", "value": 65}
+# bonus contributes nothing. The two hand-modelled below own their own maths (see
+# dynamicSetTalents); the rest stay at zero and are flagged in the app until someone fills them in.
 
 out = {
     "dataVersion": "Sept 2026 tables",
@@ -123,6 +120,34 @@ out = {
             "Defense": ["armor", "health", "explosiveRes", "hazardProtection"],
             "Utility": ["skillDamage", "skillHaste", "skillDuration", "skillRepair"],
             "Handling": ["accuracy", "stability", "reloadSpeed", "magazineSizePct"]}
+    },
+    # A gear set's 4-piece talent, where its chest and backpack talents change the maths rather
+    # than adding a flat bonus of their own. Each entry names the amplifier talents so the app can
+    # tell whether they are equipped — and so it knows to ignore their placeholder modifiers.
+    "dynamicSetTalents": {
+        "Striker's Battlegear": {
+            "talent": "Striker's Gamble",
+            "note": "stacks on weapon hits; missing drops them",
+            "amplifiers": {"chest": "gt_set_striker_bp_risk", "backpack": "gt_set_striker_bp"},
+            "params": {
+                "maxStacks": 100,
+                "perStackWeaponDamage": 0.65,
+                "chestPerStackWeaponDamage": 0.9,
+                "backpackMaxStacks": 200
+            }
+        },
+        "Heartbreaker": {
+            "talent": "Heartstopper",
+            "note": "headshots pulse; the weapon damage applies to pulsed targets only",
+            "amplifiers": {"chest": "gt_set_heartbreaker_chest", "backpack": "gt_set_heartbreaker_bp"},
+            "params": {
+                "maxStacks": 50,
+                "perStackWeaponDamage": 1.1,
+                "perStackBonusArmor": 1,
+                "chestMaxStacks": 100,
+                "backpackPerStackBonusArmor": 2
+            }
+        }
     },
     # Talents whose effect depends on the rest of the build cannot be a flat modifier bag, so the
     # app carries hand-written formulas for them and reads the numbers from here.

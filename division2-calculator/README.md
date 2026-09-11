@@ -89,8 +89,30 @@ too. The classification is a text heuristic over the source descriptions, not a 
 A few talents read the rest of your build, so no stored modifier can describe them. Those carry a
 written formula instead, and the slot card shows what it produces for the build you have.
 
-**Memento** (`gt_memento_kill`) is the first. Its short-term buff pays per equipped core, and its
-long-term buff stacks per trophy:
+Two kinds carry formulas: a **gear set's 4-piece talent**, whose chest and backpack talents rewrite
+its maths rather than adding a bonus of their own, and an **item talent** that reads the build.
+In both cases the amplifier talents' own stored modifiers are placeholders and are ignored.
+
+**Striker's Gamble** and **Heartstopper** are the set ones:
+
+```
+Striker's Gamble   weapon damage = stacks x perStack
+                   Risk Management (chest)    perStack  0.65% -> 0.9%
+                   Press the Advantage (bpack) maxStacks   100 -> 200
+
+Heartstopper       weapon damage = stacks x 1.1%   (vs pulsed targets only)
+                   bonus armor   = stacks x perStackArmor
+                   Max BPM (chest)   maxStacks       50 -> 100
+                   Cold (backpack)   perStackArmor   1%  -> 2%
+```
+
+So a full Striker with both amplifiers reaches 200 × 0.9% = **+180% weapon damage**, and a full
+Heartbreaker with both reaches 100 × 1.1% = **+110% weapon damage** against pulsed targets plus
+100 × 2% = **+200% bonus armor**. Swap either amplifier out and the figure moves accordingly; the
+set's bonus row shows the working.
+
+**Memento** (`gt_memento_kill`) is the item one. Its short-term buff pays per equipped core, and
+its long-term buff stacks per trophy:
 
 ```
 weapon damage      = redCores   x 5%  + stacks x 1%
@@ -109,6 +131,11 @@ The whole talent is conditional, so it sits entirely in the gap between resting 
 
 Percentage-based armour regeneration is a real stat now, applied against the armour pool after the
 pool is worked out, rather than being confused with the flat per-second attribute.
+
+**Bonus armour is tracked apart from the armour pool.** It is an overshield a build accrues, not a
+multiplier on what it starts with, so it has its own readout row and its own matrix row and joins
+the total only in Effective HP. Folding it into Armor would have reported a Heartbreaker at 2.3M
+armour, which is not a number the character sheet would ever show.
 
 ### Assumptions worth knowing
 - **Base health is 100,000**, used as the pool that percentage health bonuses multiply. It is an

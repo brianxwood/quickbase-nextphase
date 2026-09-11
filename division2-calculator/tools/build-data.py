@@ -65,6 +65,28 @@ for x in db['gearItems']:
     if x['id'] == 'gi_bp_corestrength':
         x['hasTalent'] = False
 
+# A talent that only pays out on a trigger or a stack count is not part of the resting sheet.
+# Flag them so the app can report a floor (nothing proc'd) as well as a ceiling (all maxed).
+# Trigger verbs only — "Increase reload speed by 30%" is always on, "Reloading grants..." is not.
+TRIGGER = re.compile(
+    r"\bstack|\bwhen\b|\bwhile\b|\bafter\b|\bif\b|\bkill|headshot|critical hit|suppress"
+    r"|taking damage|hitting|damaging|applying|swapping|reloading|entering|cover to cover"
+    r"|\bbelow\b", re.I)
+
+conditional_counts = {"gearTalents": [0, 0], "weaponTalents": [0, 0]}
+for key in ("gearTalents", "weaponTalents"):
+    for t in db[key]:
+        cond = bool(TRIGGER.search(t.get("description") or ""))
+        t["conditional"] = cond
+        conditional_counts[key][0 if cond else 1] += 1
+
+# Every gear set's 4-piece talent is stored as a zero-valued placeholder, so the headline set
+# bonus contributes nothing. Striker's Gamble is recoverable from the set's own talent text:
+# Risk Management reads "increases total weapon damage gained per stack ... from 0.65%" and
+# Press the Advantage reads "increases max stacks ... from 100", so 100 x 0.65% = 65%.
+# The rest stay at zero and are flagged in the app until someone fills them in.
+db["gearSets"]["Striker's Battlegear"]["bonuses"]["4"] = {"statType": "weaponDamage", "value": 65}
+
 out = {
     "dataVersion": "Sept 2026 tables",
     "weapons": db["weapons"],
@@ -115,3 +137,4 @@ js = ("/* The Division 2 reference tables. Generated — see README.md for prove
 p = pathlib.Path(__file__).resolve().parent.parent / 'data.js'
 p.write_text(js)
 print('wrote', p.stat().st_size // 1024, 'KB; sig perks remapped:', fixed)
+print('conditional/always-on — gear %s, weapon %s' % (tuple(conditional_counts['gearTalents']), tuple(conditional_counts['weaponTalents'])))

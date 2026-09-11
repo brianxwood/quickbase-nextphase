@@ -332,8 +332,9 @@ function add(stats, statType, value, source) {
    bucket turns +5000 armour into +5000% of the pool. */
 const TALENT_FLAT_STATS = new Set(['armor', 'armorRegen']);
 
-function applyTalentModifiers(stats, talent) {
+function applyTalentModifiers(stats, talent, withConditional) {
   if (!talent || !talent.modifiers) return;
+  if (talent.conditional && !withConditional) return;
   for (const [statType, value] of Object.entries(talent.modifiers)) {
     add(stats, statType, value, TALENT_FLAT_STATS.has(statType) ? 'flat' : 'pct');
   }
@@ -352,7 +353,7 @@ function countSets(build) {
 }
 
 /** Everything the gear, brands, sets, specialization and watch contribute. */
-function gearStats(build) {
+function gearStats(build, withConditional) {
   const stats = blankStats();
 
   for (const g of build.gear) {
@@ -385,7 +386,7 @@ function gearStats(build) {
       add(stats, def.statType, m.value == null ? capOf(def) : m.value, 'flat');
     }
     if (item.hasTalent) {
-      applyTalentModifiers(stats, GEAR_TALENTS[lockedTalentOf(item) || g.talentId]);
+      applyTalentModifiers(stats, GEAR_TALENTS[lockedTalentOf(item) || g.talentId], withConditional);
     }
   }
 
@@ -398,8 +399,18 @@ function gearStats(build) {
   }
   for (const [name, n] of Object.entries(counts.sets)) {
     const lines = setLines(name);
-    for (const line of lines) if (line.pieces <= n) add(stats, line.statType, line.value, 'pct');
-    activeSets.push({ name, pieces: n, lines, talentName: (D.gearSets[name] || {}).talentName });
+    for (const line of lines) {
+      if (line.pieces > n) continue;
+      if (line.pieces >= 4 && !withConditional) continue;
+      add(stats, line.statType, line.value, 'pct');
+    }
+    const four = lines.filter((l) => l.pieces >= 4);
+    activeSets.push({
+      name, pieces: n, lines,
+      talentName: (D.gearSets[name] || {}).talentName,
+      // a 4-piece set whose headline talent is still a zero placeholder
+      talentUnmodelled: n >= 4 && (!four.length || four.every((l) => !l.value))
+    });
   }
   activeBrands.sort((a, b) => b.pieces - a.pieces || a.name.localeCompare(b.name));
   activeSets.sort((a, b) => b.pieces - a.pieces || a.name.localeCompare(b.name));
@@ -431,7 +442,7 @@ function gearStats(build) {
 }
 
 /** Gear stats plus the contributions of one weapon's own rolls, mods and talent. */
-function statsForWeapon(base, build, index) {
+function statsForWeapon(base, build, index, withConditional) {
   const stats = Object.assign({}, base);
   const w = build.weapons[index];
   const def = weaponOf(w);
@@ -453,7 +464,7 @@ function statsForWeapon(base, build, index) {
       add(stats, statType === 'magazineSize' ? 'magazineSizePct' : statType, value, 'pct');
     }
   }
-  applyTalentModifiers(stats, WEAPON_TALENTS[w.talentId]);
+  applyTalentModifiers(stats, WEAPON_TALENTS[w.talentId], withConditional);
   if (def.critChance) add(stats, 'critChance', def.critChance, 'pct');
   if (def.critDamage) add(stats, 'critDamage', def.critDamage, 'pct');
   return stats;
@@ -505,21 +516,47 @@ function damage(build, index, stats, sc) {
   };
 }
 
+/* A loadout has two damage numbers, not one. The floor is the resting sheet — nothing procced,
+   no stacks. The ceiling is every talent firing at max stacks, which is what a build "can" do.
+   Real play sits between, so the expected figure interpolates by the uptime you set. Blending the
+   DPS rather than the stats is the right way round: a talent is on or off at any instant, and
+   average damage over time is the time-weighted average of the two states. */
+function blend(floor, ceiling, uptime) {
+  return floor + (ceiling - floor) * uptime;
+}
+
 /** Everything the readout and the comparison matrix need for one loadout. */
 function evaluate(build, sc) {
-  const base = gearStats(build);
+  const uptime = Math.max(0, Math.min(100, sc.buffUptime == null ? 60 : sc.buffUptime)) / 100;
+  const base = gearStats(build, true);
+  const baseFloor = gearStats(build, false);
+
   const perWeapon = build.weapons.map((_, i) => {
-    const stats = statsForWeapon(base, build, i);
-    return { stats, dmg: damage(build, i, stats, sc) };
+    const stats = statsForWeapon(base, build, i, true);
+    const statsFloor = statsForWeapon(baseFloor, build, i, false);
+    const ceiling = damage(build, i, stats, sc);
+    const floor = damage(build, i, statsFloor, sc);
+    return {
+      stats, statsFloor, ceiling, floor,
+      dmg: ceiling && floor ? {
+        weapon: ceiling.weapon,
+        rpm: ceiling.rpm, mag: ceiling.mag, reload: ceiling.reload,
+        perShot: blend(floor.perShot, ceiling.perShot, uptime),
+        burstDps: blend(floor.burstDps, ceiling.burstDps, uptime),
+        sustainedDps: blend(floor.sustainedDps, ceiling.sustainedDps, uptime)
+      } : null
+    };
   });
+
   const armed = perWeapon.filter((w) => w.dmg);
   const lead = perWeapon[sc.weaponIndex] && perWeapon[sc.weaponIndex].dmg
     ? perWeapon[sc.weaponIndex]
     : (armed[0] || null);
   const tier = skillTierOf(base);
   return {
-    build, base, perWeapon, lead,
+    build, base, baseFloor, perWeapon, lead, uptime,
     surv: survivability(base),
+    survFloor: survivability(baseFloor),
     tier,
     skillDamageTotal: (base.skillDamage || 0) + tier * konst('skillDamagePerTier'),
     ttk: lead && lead.dmg && lead.dmg.sustainedDps > 0 ? sc.targetHp / lead.dmg.sustainedDps : null
@@ -532,7 +569,7 @@ const state = {
   builds: [], activeId: null, compare: [], tab: 'build',
   scenario: {
     headshotRate: 35, target: 'armor', outOfCover: false, pvp: false,
-    targetHp: 1500000, weaponIndex: 0
+    targetHp: 1500000, weaponIndex: 0, buffUptime: 60
   },
   tableFilter: ''
 };
@@ -815,6 +852,12 @@ function renderScenario() {
     '   aria-label="Share of shots that land as headshots">',
     '</div>',
     '<div class="field">',
+    '  <span class="eyebrow"><span>Buff uptime</span><span class="num" id="sc-uptime-out">'
+    + sc.buffUptime + '%</span></span>',
+    '  <input type="range" id="sc-uptime" min="0" max="100" step="5" value="' + sc.buffUptime + '"',
+    '   aria-label="Share of the fight with stacking talents active">',
+    '</div>',
+    '<div class="field">',
     '  <span class="eyebrow">Target</span>',
     '  <div class="seg" id="sc-target">',
     '    <button data-target="armor" aria-pressed="' + (sc.target === 'armor') + '">Armored</button>',
@@ -1075,10 +1118,18 @@ function renderBonuses(ev) {
       + '<span class="pips">' + Array.from({ length: pipCount }, (_, i) =>
         '<span class="pip' + (i < set.pieces ? ' on' : '') + '"></span>').join('') + '</span>'
       + '<span class="blines">'
-      + set.lines.map((l) => '<span class="' + (l.pieces <= set.pieces ? 'live' : '') + '">'
-        + l.pieces + '· ' + esc(statText(l.statType, l.value)) + '</span>').join('')
-      + (set.talentName ? '<span class="' + (set.pieces >= 4 ? 'live' : '') + '">4· '
-        + esc(set.talentName) + '</span>' : '')
+      + set.lines.filter((l) => l.pieces < 4)
+        .map((l) => '<span class="' + (l.pieces <= set.pieces ? 'live' : '') + '">'
+          + l.pieces + '· ' + esc(statText(l.statType, l.value)) + '</span>').join('')
+      + (set.talentName
+        ? '<span class="' + (set.pieces >= 4 && !set.talentUnmodelled ? 'live' : '') + '">4· '
+          + esc(set.talentName)
+          + (set.talentUnmodelled
+            ? ' <em>— not modelled</em>'
+            : set.lines.filter((l) => l.pieces >= 4 && l.value)
+              .map((l) => ' · ' + esc(statText(l.statType, l.value))).join(''))
+          + '</span>'
+        : '')
       + '</span></div>');
   }
   for (const brand of ev.base._brands) {
@@ -1204,11 +1255,25 @@ function renderReadout() {
   const cap = konst('critChanceCap');
   const chc = Math.min(s.critChance || 0, cap);
 
+  const floorDps = ev.lead && ev.lead.floor ? ev.lead.floor.sustainedDps : 0;
+  const ceilDps = ev.lead && ev.lead.ceiling ? ev.lead.ceiling.sustainedDps : 0;
+  const span = ceilDps - floorDps;
+  const atPct = span > 0 ? Math.round(((dmg.sustainedDps - floorDps) / span) * 100) : 0;
+
   const headline = '<div class="hero">'
-    + '<span class="k eyebrow">Sustained DPS</span>'
+    + '<span class="k eyebrow">Expected sustained DPS</span>'
     + '<span class="v">' + (dmg ? compact(dmg.sustainedDps) : '—') + '</span>'
     + '<span class="sub">' + (dmg ? int(dmg.perShot) + ' per shot · '
-      + (ev.lead && ev.lead.dmg ? esc(ev.lead.dmg.weapon.name) : '') : 'no weapon equipped') + '</span>'
+      + esc(dmg.weapon.name) : 'no weapon equipped') + '</span>'
+    + (dmg && span > 0
+      ? '<div class="range" role="img" aria-label="Floor ' + compact(floorDps)
+        + ' to ceiling ' + compact(ceilDps) + ' DPS, expected ' + compact(dmg.sustainedDps) + '">'
+        + '<div class="range-track"><div class="range-fill" style="width:' + atPct + '%"></div>'
+        + '<div class="range-pin" style="left:' + atPct + '%"></div></div>'
+        + '<div class="range-ends"><span>' + compact(floorDps) + ' resting</span>'
+        + '<span>' + compact(ceilDps) + ' all procced</span></div>'
+        + '</div>'
+      : '')
     + '</div>'
     + '<div class="headline">'
     + '<div><span class="k eyebrow">Time to kill</span><span class="v">'
@@ -1268,8 +1333,9 @@ function renderReadout() {
 
   document.getElementById('readout').innerHTML =
     '<div class="panel readout-main"><header><h2>Readout</h2></header>' + headline
-    + '<div class="body"><p class="hint" style="margin:0">Talents and stacking buffs count at full'
-    + ' stacks, so these are ceiling numbers — useful for ranking loadouts, optimistic as absolutes.</p>'
+    + '<div class="body"><p class="hint" style="margin:0">Floor is the resting sheet with nothing'
+    + ' procced; ceiling is every stacking talent at max. Expected sits at '
+    + Math.round(ev.uptime * 100) + '% uptime — drag it in the scenario bar.</p>'
     + '</div></div>'
     + '<div class="panel"><header><h2>Offense</h2></header><div class="statlist">' + offense
     + (weaponTypeRows ? '<div class="srow group"><span class="eyebrow">By weapon type</span><span></span></div>'
@@ -1283,7 +1349,11 @@ function renderReadout() {
 
 const MATRIX_ROWS = [
   { section: 'Damage' },
-  { key: 'sustained', label: 'Sustained DPS', get: (e) => e.lead && e.lead.dmg ? e.lead.dmg.sustainedDps : 0, fmt: compact },
+  { key: 'sustained', label: 'Sustained DPS (expected)', get: (e) => e.lead && e.lead.dmg ? e.lead.dmg.sustainedDps : 0, fmt: compact },
+  { key: 'floor', label: 'Resting DPS (nothing procced)', get: (e) => e.lead && e.lead.floor ? e.lead.floor.sustainedDps : 0, fmt: compact },
+  { key: 'ceiling', label: 'Peak DPS (all stacks)', get: (e) => e.lead && e.lead.ceiling ? e.lead.ceiling.sustainedDps : 0, fmt: compact },
+  { key: 'swing', label: 'Ramp multiplier', get: (e) => (e.lead && e.lead.floor && e.lead.floor.sustainedDps > 0
+      ? e.lead.ceiling.sustainedDps / e.lead.floor.sustainedDps : 0), fmt: (v) => v ? v.toFixed(2) + '×' : '—' },
   { key: 'burst', label: 'Burst DPS', get: (e) => e.lead && e.lead.dmg ? e.lead.dmg.burstDps : 0, fmt: compact },
   { key: 'pershot', label: 'Damage per shot', get: (e) => e.lead && e.lead.dmg ? e.lead.dmg.perShot : 0, fmt: int },
   { key: 'ttk', label: 'Time to kill', get: (e) => e.ttk || 0, fmt: (v) => v ? v.toFixed(2) + 's' : '—', lowerBetter: true },
@@ -1649,6 +1719,10 @@ document.getElementById('scenario').addEventListener('input', (e) => {
     sc.headshotRate = Number(el.value);
     const out = document.querySelector('#scenario .field .eyebrow .num');
     if (out) out.textContent = sc.headshotRate + '%';
+  } else if (el.id === 'sc-uptime') {
+    sc.buffUptime = Number(el.value);
+    const out = document.getElementById('sc-uptime-out');
+    if (out) out.textContent = sc.buffUptime + '%';
   } else if (el.id === 'sc-cover') sc.outOfCover = el.checked;
   else if (el.id === 'sc-pvp') sc.pvp = el.checked;
   else if (el.id === 'sc-weapon') sc.weaponIndex = Number(el.value);

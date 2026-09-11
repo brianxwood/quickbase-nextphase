@@ -35,8 +35,9 @@ whole app.
 - **Specialization** — all six, with per-perk tier allocation, point cost tracking and a cap on how
   many weapon archetypes can be boosted at once (three by default, editable).
 - **SHD watch** — point allocation across the four categories.
-- **Derived output** — sustained/burst DPS, damage per shot, effective RPM, time to kill, armor,
-  health, effective HP, skill tier and skill damage, plus the full stat readout.
+- **Derived output** — a DPS *range* rather than one number (see below), damage per shot, burst
+  DPS, effective RPM, time to kill, armor, health, effective HP, skill tier and skill damage, plus
+  the full stat readout.
 
 ## The damage model
 
@@ -58,14 +59,41 @@ Rather than an all-or-nothing headshot toggle, the scenario bar takes a **headsh
 crit and headshot buckets are weighted by how often you actually land them. That is what makes two
 loadouts comparable on one number.
 
-### Assumptions worth knowing
+### Ramping talents, and the DPS range
 
-- **Talents count at full stacks.** A stacking talent contributes its ceiling value, so the figures
-  rank loadouts well but read optimistically as absolutes.
+Most of what makes a Division 2 build strong only pays out once it is running: Obliterate wants
+20 critical hits, Striker's Gamble wants 100 stacks, Vigilance drops the moment you are hit. A
+single DPS number cannot describe that, so the app reports a band:
+
+| Figure | What it is |
+| --- | --- |
+| **Resting** | the sheet with nothing procced — no stacks, no triggers |
+| **Expected** | resting and peak interpolated by the buff-uptime slider (60% by default) |
+| **Peak** | every stacking talent at max stacks |
+
+The interpolation is on the DPS, not on the stats. At any instant a talent is either active or not,
+and damage averaged over a fight is the time-weighted average of those two states, so blending the
+two DPS figures is correct where blending the underlying percentages would not be.
+
+The **ramp multiplier** in the comparison matrix is peak ÷ resting. A build at 1.1× plays the same
+whether or not it is rolling; one at 2.5× is a different weapon before and after it spins up, which
+is worth knowing before you take it into a fight you cannot control.
+
+Each talent is classified from its own description: anything with a trigger or a stack count
+(*while*, *after*, *killing*, *headshots*, *stacks*, *taking damage*, …) counts as conditional;
+flat talents such as "Increase reload speed by 30%" are always on and sit in the resting figure
+too. The classification is a text heuristic over the source descriptions, not a curated list.
+
+### Assumptions worth knowing
 - **Base health is 100,000**, used as the pool that percentage health bonuses multiply. It is an
   editable constant.
 - **Skill damage per tier is 15%**, also editable.
-- Conditional talents (positional, on-kill, below-armor-threshold) are applied unconditionally.
+- **Most gear sets' 4-piece talents are not modelled.** The source stores every set's headline
+  talent as a zero-valued placeholder, so Heartstopper, Apex Predator, Crowd Control and the rest
+  contribute nothing to the numbers. Striker's Gamble is the exception: the set's own talent text
+  quotes it (0.65% weapon damage per stack, 100 stacks), so it ships at +65%. A 4-piece set whose
+  talent is still unmodelled is flagged in the brand and set bonus panel, and the value is editable
+  in Tables like any other — set it and it feeds the peak figure immediately.
 - **Talent armour is flat, not proportional.** Talent modifiers encode armour the way a gear core
   does — Cold grants 5,000, Hardened 10,000 — so it is added to the pool rather than multiplying it.
   Every other talent modifier is a percentage.

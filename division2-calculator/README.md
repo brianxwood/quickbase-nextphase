@@ -20,6 +20,12 @@ whole app.
 - **Talents follow the item.** A gear set chest or backpack only offers that set's own talents and
   comes with one already selected — you cannot put Obliterate on a Striker's Battlegear chest. Brand
   pieces get the generic pool and never a set talent. An exotic's talent is built in and locked.
+- **Slot layout.** Every slot carries one core attribute and two secondary attributes. Mod slots
+  come from the item: Mask, Chest and Backpack have one, Gloves, Holster and Kneepads none. Chest
+  and Backpack are the talent-bearing slots. The attribute count is an editable table (see below).
+- **Three-core backpacks.** Memento, NinjaBike Messenger Backpack, Harrier Pride and the Core
+  Strength backpack grant Weapon Damage, Armor *and* Skill Tier instead of a core plus two
+  secondary rolls, and the app models them that way rather than offering a core picker.
 - **Brand and gear set bonuses** — counted across the six slots, with 1/2/3-piece brand tiers and
   2/3/4-piece set tiers lighting up as pieces are added.
 - **Weapons** — 3 slots: weapon, core attribute, two attributes, talent, attachments, expertise.
@@ -62,7 +68,7 @@ loadouts comparable on one number.
 ## Every number is editable
 
 The **Tables** view exposes the underlying data — brand bonuses, gear set bonuses, attribute and mod
-caps, SHD per-point values and the game constants. Edit any of them and every loadout recalculates.
+caps, attribute lines per gear slot, SHD per-point values and the game constants. Edit any of them and every loadout recalculates.
 Edits are saved alongside your loadouts and marked against their shipped default, and "Reset all"
 puts everything back. This matters because the tables were read off community sources rather than
 game files, so a tuning pass can leave a value stale.
@@ -93,6 +99,15 @@ applied to the source data:
    none. Risk Management is re-slotted to Chest, corroborated by
    [faildruid/division-2-db](https://github.com/faildruid/division-2-db), which lists it as a chest
    talent.
+4. Only Memento and NinjaBike Messenger Backpack were flagged as three-core pieces. Harrier Pride
+   and the Core Strength backpack are flagged too, and all four are given zero secondary attribute
+   lines. The Core Strength backpack's talent flag is cleared — the set has no backpack talent, so
+   without this it would inherit the chest's through the set's shared pool.
+
+The per-slot attribute count is taken as two everywhere. The fixed rolls on exotics are the evidence:
+Coyote's Mask is 6% critical hit chance plus 12% critical hit damage, and the Waveform holster and
+Acosta's Kneepads carry the same pair, so those slots hold two attribute lines rather than one. If
+your reading of a slot differs, change it in the Tables view — nothing is hard-coded.
 
 **Known limitation in the upstream talent data:** the `gearSet` field on each set talent is
 reliable, but the chest-vs-backpack `slot` label is not always. Core Strength has no backpack talent

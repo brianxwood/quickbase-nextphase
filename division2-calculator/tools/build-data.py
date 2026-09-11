@@ -44,6 +44,27 @@ for t in db['gearTalents']:
         restruck += 1
 assert restruck == 1, restruck
 
+# Four backpacks carry all three core attributes instead of a core plus two secondary rolls.
+# Upstream flags only Memento and NinjaBike; Harrier Pride and the Core Strength backpack are
+# the other two. Core Strength having no backpack talent in the source corroborates it — the
+# third core takes that slot.
+allcore = 0
+for x in db['gearItems']:
+    if x['id'] in ('gi_bp_harrier', 'gi_bp_corestrength'):
+        x['allCores'] = True
+        allcore += 1
+    if x.get('allCores'):
+        # a three-core piece has no secondary attribute lines
+        x['maxAttributes'] = 0
+assert allcore == 2, allcore
+assert sum(1 for x in db['gearItems'] if x.get('allCores')) == 4
+
+# Core Strength's backpack has no set talent of its own; without this it would inherit the
+# chest talent through the set's shared pool.
+for x in db['gearItems']:
+    if x['id'] == 'gi_bp_corestrength':
+        x['hasTalent'] = False
+
 out = {
     "dataVersion": "Sept 2026 tables",
     "weapons": db["weapons"],
@@ -63,6 +84,11 @@ out = {
     "specializations": specs,
     "slotBaseArmor": {"Mask": 80000, "Gloves": 80000, "Holster": 112000,
                       "Kneepads": 99000, "Backpack": 131000, "Chest": 158000},
+    # Secondary attribute lines per slot, on top of the core. Every slot carries two: the fixed
+    # rolls on exotics confirm it (Coyote's Mask 6% CHC + 12% CHD, Waveform holster and Acosta's
+    # Kneepads the same). Mod slots are per item and come from the item data, not from here.
+    "slotAttributeSlots": {"Mask": 2, "Chest": 2, "Backpack": 2,
+                           "Gloves": 2, "Holster": 2, "Kneepads": 2},
     "shd": {
         "maxPerStat": 50,
         "bonusPerPoint": {"weaponDamage": 0.2, "headshotDamage": 0.4, "critDamage": 0.4,

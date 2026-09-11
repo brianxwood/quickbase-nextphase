@@ -187,13 +187,19 @@ const pieceArmor = (g) => {
 };
 const fixedAttrsOf = (g) => (itemOf(g) || {}).fixedAttributes || [];
 
+const slotAttrLines = (slot) => Number(ov('slotattrs:' + slot, D.slotAttributeSlots[slot] || 2));
+
 /** Exotics spend their attribute lines on fixed rolls; what is left is editable. */
 function attrSlotCount(g) {
   const item = itemOf(g);
   if (!item) return 0;
+  if (item.allCores) return 0;
   if (item.maxAttributes != null) return item.maxAttributes;
-  return Math.max(0, 2 - fixedAttrsOf(g).length);
+  return Math.max(0, slotAttrLines(g.slot) - fixedAttrsOf(g).length);
 }
+
+/** Memento, NinjaBike, Harrier Pride and the Core Strength backpack carry all three cores. */
+const allCoresOf = (item) => !!(item && item.allCores);
 const modSlotCount = (g) => (itemOf(g) ? (itemOf(g).modSlots || 0) : 0);
 const attrPoolFor = (g) => {
   const item = itemOf(g);
@@ -241,8 +247,7 @@ function defaultTalentFor(g) {
   const locked = lockedTalentOf(item);
   if (locked) return locked;
   if (!item.gearSet) return null;
-  const pool = talentChoicesFor(g);
-  const match = pool.find((t) => t.slot === g.slot) || pool[0];
+  const match = talentChoicesFor(g).find((t) => t.slot === g.slot);
   return match ? match.id : null;
 }
 
@@ -313,10 +318,14 @@ function gearStats(build) {
     if (!item) continue;
     stats.armorFlat += pieceArmor(g);
 
-    const core = g.coreId ? GEAR_CORES[g.coreId] : null;
-    if (core) {
-      const value = g.coreValue == null ? capOf(core) : g.coreValue;
-      add(stats, core.statType, value, 'flat');
+    if (allCoresOf(item)) {
+      for (const c of D.gearCoreAttributes) add(stats, c.statType, capOf(c), 'flat');
+    } else {
+      const core = g.coreId ? GEAR_CORES[g.coreId] : null;
+      if (core) {
+        const value = g.coreValue == null ? capOf(core) : g.coreValue;
+        add(stats, core.statType, value, 'flat');
+      }
     }
     for (const fixed of fixedAttrsOf(g)) add(stats, fixed.statType, fixed.value, 'flat');
     for (let i = 0; i < attrSlotCount(g); i++) {
@@ -702,6 +711,10 @@ const statText = (statType, value) => {
   return label(statType) + ' +' + value + '%';
 };
 
+/** Sort option items by their visible label so every pulldown reads alphabetically. */
+const alpha = (items) => items.slice().sort((a, b) =>
+  String(a.text).localeCompare(String(b.text), 'en', { numeric: true }));
+
 /** Option list builder; `groups` is [{label, items:[{value,text,disabled}]}] or a flat item list. */
 function options(groups, selected, placeholder) {
   let html = placeholder === null ? ''
@@ -790,7 +803,7 @@ function renderGearSlot(g, index) {
     else if (candidate.brand) groups[1].items.push(entry);
     else groups[4].items.push(entry);
   }
-  for (const group of groups) group.items.sort((a, b) => a.text.localeCompare(b.text));
+  for (const group of groups) group.items = alpha(group.items);
 
   const rows = [];
   rows.push('<div class="slot-head">'
@@ -803,16 +816,27 @@ function renderGearSlot(g, index) {
     + options(groups, g.itemId, '— empty slot —') + '</select>');
 
   if (item) {
-    const cores = coreChoicesFor(g);
-    const core = g.coreId ? GEAR_CORES[g.coreId] : null;
-    rows.push('<div class="row-label"><span class="eyebrow">Core</span>'
-      + '<div class="attr-row">'
-      + '<select data-gear="' + index + '" data-field="coreId" aria-label="Core attribute">'
-      + options(cores.map((c) => ({ value: c.id, text: c.name })), g.coreId, '— no core —') + '</select>'
-      + '<input type="number" step="any" data-gear="' + index + '" data-field="coreValue"'
-      + ' value="' + (core ? (g.coreValue == null ? capOf(core) : g.coreValue) : '') + '"'
-      + (core ? '' : ' disabled') + ' aria-label="Core value">'
-      + '</div></div>');
+    if (allCoresOf(item)) {
+      for (const c of D.gearCoreAttributes) {
+        rows.push('<div class="row-label"><span class="eyebrow">Core</span>'
+          + '<div class="attr-row locked">'
+          + '<input type="text" value="' + esc(c.name) + '" disabled aria-label="Core attribute">'
+          + '<input type="text" value="' + esc(capOf(c)) + '" disabled aria-label="Core value">'
+          + '</div></div>');
+      }
+      rows.push('<p class="hint">All three cores — no secondary attribute rolls.</p>');
+    } else {
+      const cores = alpha(coreChoicesFor(g).map((c) => ({ value: c.id, text: c.name })));
+      const core = g.coreId ? GEAR_CORES[g.coreId] : null;
+      rows.push('<div class="row-label"><span class="eyebrow">Core</span>'
+        + '<div class="attr-row">'
+        + '<select data-gear="' + index + '" data-field="coreId" aria-label="Core attribute">'
+        + options(cores, g.coreId, '— no core —') + '</select>'
+        + '<input type="number" step="any" data-gear="' + index + '" data-field="coreValue"'
+        + ' value="' + (core ? (g.coreValue == null ? capOf(core) : g.coreValue) : '') + '"'
+        + (core ? '' : ' disabled') + ' aria-label="Core value">'
+        + '</div></div>');
+    }
 
     for (const fixed of fixedAttrsOf(g)) {
       rows.push('<div class="row-label"><span class="eyebrow">Fixed</span>'
@@ -828,8 +852,8 @@ function renderGearSlot(g, index) {
       const def = a.id ? (GEAR_ATTRS[a.id] || PROTO_ATTRS[a.id]) : null;
       const byCategory = ['Offensive', 'Defensive', 'Utility'].map((cat) => ({
         label: cat,
-        items: pool.filter((p) => p.category === cat && !p.modOnly)
-          .map((p) => ({ value: p.id, text: p.name }))
+        items: alpha(pool.filter((p) => p.category === cat && !p.modOnly)
+          .map((p) => ({ value: p.id, text: p.name })))
       }));
       rows.push('<div class="row-label"><span class="eyebrow">Attr ' + (i + 1) + '</span>'
         + '<div class="attr-row">'
@@ -847,7 +871,7 @@ function renderGearSlot(g, index) {
       rows.push('<div class="row-label"><span class="eyebrow">Mod ' + (i + 1) + '</span>'
         + '<div class="attr-row">'
         + '<select data-gear="' + index + '" data-mod="' + i + '" aria-label="Mod ' + (i + 1) + '">'
-        + options(D.mods.map((x) => ({ value: x.id, text: x.name })), m.id, '— empty —') + '</select>'
+        + options(alpha(D.mods.map((x) => ({ value: x.id, text: x.name }))), m.id, '— empty —') + '</select>'
         + '<input type="number" step="any" data-gear="' + index + '" data-modval="' + i + '"'
         + ' value="' + (def ? (m.value == null ? capOf(def) : m.value) : '') + '"'
         + (def ? '' : ' disabled') + ' aria-label="Mod ' + (i + 1) + ' value">'
@@ -863,8 +887,8 @@ function renderGearSlot(g, index) {
       rows.push('<div class="row-label"><span class="eyebrow">Talent</span>'
         + '<select data-gear="' + index + '" data-field="talentId"' + (locked ? ' disabled' : '')
         + ' aria-label="Talent">'
-        + options(choices.map((t) => ({ value: t.id, text: t.name })), chosen,
-          fixedToSet || locked ? null : '— no talent —') + '</select>'
+        + options(alpha(choices.map((t) => ({ value: t.id, text: t.name }))), chosen,
+          locked || (fixedToSet && chosen) ? null : '— no talent —') + '</select>'
         + '</div>');
       if (fixedToSet) {
         rows.push('<p class="hint">Set piece — only ' + esc(item.gearSet) + ' talents roll here.</p>');
@@ -885,12 +909,14 @@ function renderGearSlot(g, index) {
 
 function renderWeaponSlot(w, index, ev) {
   const def = weaponOf(w);
-  const groups = Object.keys(WEAPONS_BY_TYPE).sort().map((type) => ({
-    label: TYPE_LABEL[type] || type,
-    items: WEAPONS_BY_TYPE[type].slice()
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((x) => ({ value: x.id, text: x.name + (x.quality === 'High-End' ? '' : ' · ' + x.quality) }))
-  }));
+  const groups = Object.keys(WEAPONS_BY_TYPE)
+    .map((type) => ({
+      label: TYPE_LABEL[type] || type,
+      items: alpha(WEAPONS_BY_TYPE[type].map((x) => ({
+        value: x.id, text: x.name + (x.quality === 'High-End' ? '' : ' · ' + x.quality)
+      })))
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const rows = [];
   rows.push('<div class="slot-head"><span class="name">' + WEAPON_SLOT_NAMES[index] + '</span>'
@@ -913,7 +939,7 @@ function renderWeaponSlot(w, index, ev) {
     const core = w.coreId ? WEAPON_CORES[w.coreId] : null;
     rows.push('<div class="row-label"><span class="eyebrow">Core</span><div class="attr-row">'
       + '<select data-wpn="' + index + '" data-field="coreId" aria-label="Weapon core">'
-      + options(D.weaponCoreAttributes.map((c) => ({ value: c.id, text: c.name })), w.coreId, '— no core —')
+      + options(alpha(D.weaponCoreAttributes.map((c) => ({ value: c.id, text: c.name }))), w.coreId, '— no core —')
       + '</select>'
       + '<input type="number" step="any" data-wpn="' + index + '" data-field="coreValue"'
       + ' value="' + (core ? (w.coreValue == null ? capOf(core) : w.coreValue) : '') + '"'
@@ -924,7 +950,7 @@ function renderWeaponSlot(w, index, ev) {
       const adef = a.id ? WEAPON_ATTRS[a.id] : null;
       rows.push('<div class="row-label"><span class="eyebrow">Attr ' + (i + 1) + '</span><div class="attr-row">'
         + '<select data-wpn="' + index + '" data-attr="' + i + '" aria-label="Weapon attribute ' + (i + 1) + '">'
-        + options(D.weaponAttributes.map((x) => ({ value: x.id, text: x.name })), a.id, '— empty —') + '</select>'
+        + options(alpha(D.weaponAttributes.map((x) => ({ value: x.id, text: x.name }))), a.id, '— empty —') + '</select>'
         + '<input type="number" step="any" data-wpn="' + index + '" data-attrval="' + i + '"'
         + ' value="' + (adef ? (a.value == null ? capOf(adef) : a.value) : '') + '"'
         + (adef ? '' : ' disabled') + ' aria-label="Weapon attribute value"></div></div>');
@@ -933,7 +959,7 @@ function renderWeaponSlot(w, index, ev) {
     const talent = WEAPON_TALENTS[w.talentId];
     rows.push('<div class="row-label"><span class="eyebrow">Talent</span>'
       + '<select data-wpn="' + index + '" data-field="talentId" aria-label="Weapon talent">'
-      + options(weaponTalentChoices(w).map((t) => ({ value: t.id, text: t.name })), w.talentId, '— no talent —')
+      + options(alpha(weaponTalentChoices(w).map((t) => ({ value: t.id, text: t.name }))), w.talentId, '— no talent —')
       + '</select></div>');
     if (talent) rows.push('<p class="talent-desc">' + richText(talent.description) + '</p>');
 
@@ -942,7 +968,7 @@ function renderWeaponSlot(w, index, ev) {
       if (!choices.length) continue;
       rows.push('<div class="row-label"><span class="eyebrow">' + kind + '</span>'
         + '<select data-wpn="' + index + '" data-attachment="' + kind + '" aria-label="' + kind + '">'
-        + options(choices.map((a) => ({ value: a.id, text: a.name })), w.attachments[kind], '— empty —')
+        + options(alpha(choices.map((a) => ({ value: a.id, text: a.name }))), w.attachments[kind], '— empty —')
         + '</select></div>');
     }
 
@@ -984,7 +1010,7 @@ function renderBonuses(ev) {
 }
 
 function renderSpec(build) {
-  const names = Object.keys(D.specializations);
+  const names = Object.keys(D.specializations).sort();
   const spec = build.spec ? D.specializations[build.spec] : null;
   let html = '<select id="spec-pick" aria-label="Specialization">'
     + options(names.map((n) => ({ value: n, text: n })), build.spec, '— no specialization —') + '</select>';
@@ -1293,6 +1319,12 @@ function renderTables() {
       + Object.keys(D.constants).map((name) =>
         editRow('const:' + name, name.replace(/([A-Z])/g, ' $1').toLowerCase(), D.constants[name])).join('')
       + '</div>');
+  }
+  if (hit('gear slot layout attributes')) {
+    cards.push('<div class="edit-card"><h3>Attribute lines per slot</h3>'
+      + SLOTS.map((slot) => editRow('slotattrs:' + slot, slot, D.slotAttributeSlots[slot])).join('')
+      + '<p class="dflt" style="margin:6px 0 0">Secondary rolls on top of the core. Mod slots come'
+      + ' from each item, not from here.</p></div>');
   }
   if (hit('shd watch')) {
     cards.push('<div class="edit-card"><h3>SHD watch per point</h3>'

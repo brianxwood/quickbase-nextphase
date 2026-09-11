@@ -862,7 +862,7 @@ const SEEDS = [
   },
   {
     name: 'Heartbreaker LMG — example', spec: 'Gunner', perks: { gun_lmg_dmg: 3, gun_reload: 1 },
-    shd: { weaponDamage: 50, critDamage: 50, critChance: 50, magazineSizePct: 50 },
+    shd: { weaponDamage: 50, critDamage: 50, critChance: 50, ammoCapacity: 50 },
     gear: [
       { slot: 'Mask', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critChance', 'critDamage'], mods: ['critDamage'] },
       { slot: 'Chest', set: 'Heartbreaker', core: 'weaponDamage', attrs: ['critDamage', 'weaponHandling'], mods: ['critDamage'] },

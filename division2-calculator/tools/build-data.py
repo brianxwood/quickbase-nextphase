@@ -135,12 +135,12 @@ for kind, mods in db["attachments"].items():
             m["magazineRounds"] = m.pop("magazineSize")
 assert verified == len(VERIFIED_ATTACHMENTS), (verified, len(VERIFIED_ATTACHMENTS))
 
-# An exotic's built-in mods use the same magazine key. No game screen was captured for those, so
-# they keep the source's reading of it as a percentage.
+# An exotic's built-in magazine figure is a flat round count too, not a percentage: St Elmo's
+# Engine is a 40-round base plus its built-in 30, and the game shows 70.
 for weapon in db["weapons"]:
     for slot, mods in (weapon.get("exoticMods") or {}).items():
         if "magazineSize" in mods:
-            mods["magazineSizePct"] = mods.pop("magazineSize")
+            mods["magazineRounds"] = mods.pop("magazineSize")
 
 conditional_counts = {"gearTalents": [0, 0], "weaponTalents": [0, 0]}
 for key in ("gearTalents", "weaponTalents"):
@@ -189,12 +189,12 @@ out = {
                           "critChance": 0.2, "armor": 0.2, "health": 0.2, "explosiveRes": 0.2,
                           "hazardProtection": 0.2, "skillDamage": 0.2, "skillHaste": 0.2,
                           "skillDuration": 0.4, "skillRepair": 0.2, "accuracy": 0.2,
-                          "stability": 0.2, "reloadSpeed": 0.2, "magazineSizePct": 0.4},
+                          "stability": 0.2, "reloadSpeed": 0.2, "ammoCapacity": 0.4},
         "categories": {
             "Offense": ["weaponDamage", "headshotDamage", "critDamage", "critChance"],
             "Defense": ["armor", "health", "explosiveRes", "hazardProtection"],
             "Utility": ["skillDamage", "skillHaste", "skillDuration", "skillRepair"],
-            "Handling": ["accuracy", "stability", "reloadSpeed", "magazineSizePct"]}
+            "Handling": ["accuracy", "stability", "reloadSpeed", "ammoCapacity"]}
     },
     # A gear set's 4-piece talent, where its chest and backpack talents change the maths rather
     # than adding a flat bonus of their own. Each entry names the amplifier talents so the app can

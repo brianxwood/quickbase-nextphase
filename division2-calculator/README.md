@@ -48,7 +48,8 @@ whole app.
   read-only rows instead of pickers and counted in the stats.
 - **Specialization** — all six, with per-perk tier allocation, point cost tracking and a cap on how
   many weapon archetypes can be boosted at once (three by default, editable).
-- **SHD watch** — point allocation across the four categories.
+- **SHD watch** — point allocation across the four categories. The Handling category's fourth stat
+  is Ammo Capacity (reserve ammo), not magazine size, so it does not change rounds per magazine.
 - **Derived output** — a DPS *range* rather than one number (see below), damage per shot, burst
   DPS, effective RPM, time to kill, armor, health, effective HP, skill tier and skill damage, plus
   the full stat readout.
@@ -160,6 +161,9 @@ Tables. Those settle two units the source had wrong:
   30-round AR to 50 — the source read 30 and the app treated it as +30%.
 - **Reload Speed is a percentage.** The source stores small deltas (Handstop −0.2) that look like
   seconds and were briefly modelled that way; the game shows Handstop as +14% Reload Speed.
+
+An exotic's built-in magazine figure is a flat round count too: St Elmo's Engine is a 40-round base
+plus its built-in 30, and the game shows 70.
 
 Optics and underbarrels are shared across every weapon, so those are complete. Muzzles and
 magazines are per calibre and only 5.56 was captured, so the other calibres keep the source's

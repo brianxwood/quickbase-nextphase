@@ -73,37 +73,74 @@ TRIGGER = re.compile(
     r"|taking damage|hitting|damaging|applying|swapping|reloading|entering|cover to cover"
     r"|\bbelow\b", re.I)
 
-# Attachment "reloadSpeed" is a delta in SECONDS, not a percentage: a Handstop reads -0.2 (faster)
-# and an Extended mag +0.3 (slower), and the signs pair correctly with the magazine-size changes
-# beside them. Weapon and gear attributes use the same key for a percentage, so rename it here
-# rather than let one word mean two units. "magazineSize" is a percentage, so say so.
+# Attachment values read off the game's own mod screens. These replace the source's numbers,
+# which were both incomplete (only offensive stats recorded) and wrong in places. Two units are
+# settled by the screens: "Rounds" is a flat count, and Reload Speed is a percentage.
+#
+# Scopes and underbarrels are shared across weapons, so those are complete. Muzzles and magazines
+# are per calibre and only 5.56 was captured; the other calibres keep the source's values.
+VERIFIED_ATTACHMENTS = {
+    # --- optics (Long Optics Rail, shared by every weapon) ---
+    "att_scope_acog":         {"optimalRange": 50},
+    "att_scope_c79":          {"critChance": 5},
+    "att_scope_cqbss":        {"headshotDamage": 30},
+    "att_scope_vx1":          {"headshotDamage": 35, "reloadSpeed": -10},
+    "att_scope_552holo":      {"accuracy": 30},
+    "att_scope_exps3":        {"headshotDamage": 10},
+    "att_scope_red_dot":      {"stability": 30},
+    "att_scope_small_rds":    {"accuracy": -20, "stability": 50},
+    "att_scope_russian_rds":  {"critDamage": 10},
+    "att_scope_reflex":       {"weaponHandling": 12},
+    "att_scope_t2micro":      {"accuracy": 30},
+    "att_scope_digital":      {"headshotDamage": 45, "critDamage": -5},
+    # --- underbarrel (Long Underbarrel Rail, shared) ---
+    "att_ub_laser":           {"critChance": 5},
+    "att_ub_angled":          {"stability": 30},
+    "att_ub_handstop":        {"reloadSpeed": 14},
+    "att_ub_short_grip":      {"critDamage": 10},
+    "att_ub_tac_short_grip":  {"critDamage": 15},
+    "att_ub_vertical":        {"accuracy": 30},
+    "att_ub_linked_laser":    {},   # pulses the target; no stat line on the card
+    # --- 5.56 muzzles ---
+    "att_muzzle_brake556":    {"critChance": 5},
+    "att_muzzle_comp556":     {"stability": 30},
+    "att_muzzle_flash556":    {"critDamage": 10},
+    "att_muzzle_vent556":     {"optimalRange": 50},
+    "att_muzzle_omega556":    {"stability": 40, "optimalRange": -10},
+    # --- 5.56 magazines ---
+    "att_mag_sturdy556":      {"magazineRounds": 20, "reloadSpeed": -10},
+    "att_mag_bal556":         {"stability": 30},
+    "att_mag_light556":       {"magazineRounds": 15},
+    "att_mag_tac556":         {"critDamage": 10},
+}
+
+# Sturdy Extended 5.56 Mag is tagged for marksman rifles while its four 5.56 siblings are all
+# assault rifle. 5.56 is the AR calibre and the game shows it in the AR's 5.56 magazine slot.
+for mod in db["attachments"]["Magazine"]:
+    if mod["id"] == "att_mag_sturdy556":
+        assert mod["weaponTypes"] == ["MMR"], mod["weaponTypes"]
+        mod["weaponTypes"] = ["AR"]
+
+verified = 0
 for kind, mods in db["attachments"].items():
     for mod in mods:
+        if mod["id"] in VERIFIED_ATTACHMENTS:
+            mod["modifiers"] = dict(VERIFIED_ATTACHMENTS[mod["id"]])
+            mod["verified"] = True
+            verified += 1
+            continue
+        # everything else keeps the source's numbers; its magazine figure is a round count
         m = mod.get("modifiers") or {}
-        if "reloadSpeed" in m:
-            m["reloadSeconds"] = m.pop("reloadSpeed")
         if "magazineSize" in m:
-            m["magazineSizePct"] = m.pop("magazineSize")
+            m["magazineRounds"] = m.pop("magazineSize")
+assert verified == len(VERIFIED_ATTACHMENTS), (verified, len(VERIFIED_ATTACHMENTS))
 
-# An exotic's built-in mods use the same magazine key for a percentage. Its reload figure really
-# is a percentage here (10, 20) rather than the seconds the attachment table uses, so leave it.
+# An exotic's built-in mods use the same magazine key. No game screen was captured for those, so
+# they keep the source's reading of it as a percentage.
 for weapon in db["weapons"]:
     for slot, mods in (weapon.get("exoticMods") or {}).items():
         if "magazineSize" in mods:
             mods["magazineSizePct"] = mods.pop("magazineSize")
-
-# A weapon's core attribute is its own weapon-type damage, fixed by the weapon — an AR reads
-# "Assault Rifle Damage +15%". The source instead modelled Damage to Armor / Damage to Health /
-# Critical Hit Chance as selectable cores; the weapons that do carry weaponCoreAttrs disagree,
-# both leading with their type damage at 15. Those three are real rolls at those caps though, so
-# they move into the attribute pool rather than being dropped, keeping the larger cap on a clash.
-by_stat = {a["statType"]: a for a in db["weaponAttributes"]}
-for core in db["weaponCoreAttributes"]:
-    existing = by_stat.get(core["statType"])
-    if existing is None:
-        db["weaponAttributes"].append({k: v for k, v in core.items() if k != "id"} | {"id": core["id"]})
-    elif core["maxValue"] > existing["maxValue"]:
-        existing["maxValue"] = core["maxValue"]
 
 conditional_counts = {"gearTalents": [0, 0], "weaponTalents": [0, 0]}
 for key in ("gearTalents", "weaponTalents"):
@@ -219,4 +256,5 @@ js = ("/* The Division 2 reference tables. Generated — see README.md for prove
 p = pathlib.Path(__file__).resolve().parent.parent / 'data.js'
 p.write_text(js)
 print('wrote', p.stat().st_size // 1024, 'KB; sig perks remapped:', fixed)
+print('verified attachments: %d' % verified)
 print('conditional/always-on — gear %s, weapon %s' % (tuple(conditional_counts['gearTalents']), tuple(conditional_counts['weaponTalents'])))

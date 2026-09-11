@@ -25,7 +25,7 @@ const FLAT_STATS = new Set(['armorFlat', 'healthFlat', 'armorRegen']);
 const ATTACHMENT_STATS = [
   'critChance', 'critDamage', 'headshotDamage', 'weaponDamage',
   'accuracy', 'stability', 'weaponHandling', 'optimalRange',
-  'rateOfFire', 'magazineSizePct', 'reloadSeconds'
+  'rateOfFire', 'magazineRounds', 'magazineSizePct', 'reloadSpeed'
 ];
 
 /* Brand, gear-set and specialization bonuses express armor and health as percentages of the
@@ -55,7 +55,7 @@ const STAT_LABEL = {
   skillRepair: 'Skill repair', skillDuration: 'Skill duration', statusEffects: 'Status effects',
   skillEfficiency: 'Skill efficiency', skillHealth: 'Skill health', shieldHealth: 'Shield health',
   burnDamage: 'Burn damage', burnDuration: 'Burn duration', bleedDamage: 'Bleed damage',
-  reloadSeconds: 'Reload time', meleeDamage: 'Melee damage',
+  magazineRounds: 'Magazine (rounds)', meleeDamage: 'Melee damage',
   stability: 'Stability', accuracy: 'Accuracy',
   optimalRange: 'Optimal range',
   reloadSpeed: 'Reload speed', rateOfFire: 'Rate of fire', magazineSizePct: 'Magazine size',
@@ -693,9 +693,9 @@ function damage(build, index, stats, sc) {
   if (!def) return null;
 
   const rpm = def.rpm * (1 + (stats.rateOfFire || 0) / 100);
-  const mag = Math.max(1, Math.round(def.magazineSize * (1 + (stats.magazineSizePct || 0) / 100)));
-  const reload = Math.max(0.1,
-    def.reloadSpeed * (1 - (stats.reloadSpeed || 0) / 100) + (stats.reloadSeconds || 0));
+  const mag = Math.max(1, Math.round((def.magazineSize + (stats.magazineRounds || 0))
+    * (1 + (stats.magazineSizePct || 0) / 100)));
+  const reload = Math.max(0.1, def.reloadSpeed * (1 - (stats.reloadSpeed || 0) / 100));
 
   const critChance = Math.min(stats.critChance || 0, konst('critChanceCap')) / 100;
   const critDamage = (konst('baseCritDamage') + (stats.critDamage || 0)) / 100;
@@ -995,7 +995,7 @@ const SHORT_STAT = {
   swapSpeed: 'swap speed', weaponHandling: 'handling', damageToElites: 'vs elites',
   damageToArmor: 'vs armor', damageToHealth: 'vs health', damageToOutOfCover: 'vs out of cover',
   ammoCapacity: 'ammo capacity', skillDamage: 'skill dmg', skillHaste: 'skill haste',
-  reloadSeconds: 'reload time', meleeDamage: 'melee damage'
+  magazineRounds: 'rounds', meleeDamage: 'melee damage'
 };
 
 /** "+5% crit damage, -20% optimal range" — the non-zero part of a modifier bag. */
@@ -1004,7 +1004,7 @@ function modifierSummary(modifiers) {
   return Object.entries(modifiers)
     .filter(([, v]) => Number(v))
     .map(([k, v]) => (v > 0 ? '+' : '\u2212') + Math.abs(v)
-      + (k === 'reloadSeconds' ? 's ' : '% ')
+      + (k === 'magazineRounds' ? ' ' : '% ')
       + (SHORT_STAT[k] || label(k).toLowerCase()))
     .join(', ');
 }
@@ -1751,9 +1751,10 @@ function renderTables() {
         if (shown >= 24) { more = true; break; }
         shown += 1;
         cards.push('<div class="edit-card"><h3>' + esc(att.name)
-          + ' <span class="dflt">' + esc(kind) + '</span></h3>'
+          + ' <span class="dflt">' + esc(kind)
+          + (att.verified ? ' · from the game' : ' · unverified') + '</span></h3>'
           + ATTACHMENT_STATS.map((stat) => editRow('att:' + att.id + ':' + stat,
-            label(stat) + (stat === 'reloadSeconds' ? ' (seconds)' : ' (%)'),
+            label(stat) + (stat === 'magazineRounds' ? ' (rounds)' : ' (%)'),
             (att.modifiers || {})[stat] || 0)).join('')
           + '</div>');
       }

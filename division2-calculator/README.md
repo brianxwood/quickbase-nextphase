@@ -151,26 +151,27 @@ multiplier on what it starts with, so it has its own readout row and its own mat
 the total only in Effective HP. Folding it into Armor would have reported a Heartbreaker at 2.3M
 armour, which is not a number the character sheet would ever show.
 
-### Weapon attachments are the weakest table
+### Weapon attachments
 
-The source recorded only an attachment's *offensive* stats. The accuracy, stability, weapon
-handling and optimal range that most mods actually grant were never captured, which is why 35 of
-the 91 entries carry nothing at all and read as "not recorded" — a gap in the table, not a mod that
-does nothing. Spot checks show the recorded values are thin too: the T2 Micro Red Dot Sight is
-+20% accuracy / −10% critical hit chance in game and −3% critical hit chance here. The entry list
-does not match the current game either, 91 against roughly 72 actual mods.
+28 attachments carry values read off the game's own mod screens, and are marked "from the game" in
+Tables. Those settle two units the source had wrong:
 
-No reachable source had a complete table, so rather than invent values every attachment is
-editable: filter by its name in Tables and all eleven stats an attachment can carry are there to
-fill in. Corrections save with your loadouts like any other override.
+- **"Rounds" is a flat count**, not a percentage. Sturdy Extended 5.56 is +20 rounds, taking a
+  30-round AR to 50 — the source read 30 and the app treated it as +30%.
+- **Reload Speed is a percentage.** The source stores small deltas (Handstop −0.2) that look like
+  seconds and were briefly modelled that way; the game shows Handstop as +14% Reload Speed.
 
-One unit bug is fixed. An attachment's reload figure is a delta in **seconds** — a Handstop reads
-−0.2 (faster), an extended magazine +0.3 (slower), and the signs pair correctly with the magazine
-size beside them — but weapon and gear attributes use the same key for a *percentage*. It was being
-read as a percentage, so an extended magazine made reloading 0.3% faster instead of a third of a
-second slower. It is now its own stat, and the generator renames it in the data so one word does
-not mean two units.
+Optics and underbarrels are shared across every weapon, so those are complete. Muzzles and
+magazines are per calibre and only 5.56 was captured, so the other calibres keep the source's
+figures and are marked "unverified".
 
+What remains unverified is still thin: the source recorded only offensive stats, so the accuracy,
+stability, weapon handling and optimal range that most mods grant are missing and many read as
+"not recorded" — a gap in the table, not a mod that does nothing. Every attachment is editable:
+filter by its name in Tables and all the stats an attachment can carry are there to fill in.
+
+One tagging error is fixed: Sturdy Extended 5.56 Mag was marked for marksman rifles while its four
+5.56 siblings were all assault rifle, so it never appeared on the weapons that take it.
 
 ### Assumptions worth knowing
 - **Base health is 100,000**, used as the pool that percentage health bonuses multiply. It is an

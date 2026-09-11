@@ -20,6 +20,9 @@ whole app.
 - **Talents follow the item.** A gear set chest or backpack only offers that set's own talents and
   comes with one already selected — you cannot put Obliterate on a Striker's Battlegear chest. Brand
   pieces get the generic pool and never a set talent. An exotic's talent is built in and locked.
+  Weapons work the same way: an exotic or named weapon carries its talent (Chameleon has Chameleon,
+  Kingbreaker has Perfect Flatline), and a plain High-End rolls from the 54 talents that are neither
+  exotic nor a Perfect version — those arrive attached to an item and are never rolled.
 - **Slot layout.** Every slot carries one core attribute and two secondary attributes. Mod slots
   come from the item: Mask, Chest and Backpack have one, Gloves, Holster and Kneepads none. Chest
   and Backpack are the talent-bearing slots. The attribute count is an editable table (see below).

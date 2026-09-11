@@ -333,7 +333,7 @@ function normalizeBuild(b) {
     const w = out.weapons[i];
     w.weaponId = WEAPONS[src.weaponId] && fitsSlot(WEAPONS[src.weaponId], i) ? src.weaponId : null;
     w.coreValue = src.coreValue == null ? null : Number(src.coreValue);
-    w.talentId = src.talentId || null;
+    w.talentId = validWeaponTalent(w, src.talentId || null);
     w.expertise = Number(src.expertise) || 0;
     w.attachments = (src.attachments && typeof src.attachments === 'object') ? src.attachments : {};
     (src.attrs || []).slice(0, 2).forEach((a, j) => {
@@ -434,11 +434,31 @@ function attachmentChoices(w, kind) {
   return (D.attachments[kind] || []).filter((a) =>
     !a.weaponTypes || a.weaponTypes.indexOf(def.type) >= 0);
 }
+/* An exotic or named weapon comes with its talent; only a plain High-End rolls one, and it rolls
+   from neither the exotic talents nor the Perfect versions, which arrive attached to an item. */
+const EXOTIC_TALENT = /\(Exotic\)/i;
+const PERFECT_TALENT = /^Perfect(ly)?\b/i;
+
+const lockedWeaponTalentOf = (def) => (def && def.defaultTalent
+  && WEAPON_TALENTS[def.defaultTalent] ? def.defaultTalent : null);
+
 function weaponTalentChoices(w) {
   const def = weaponOf(w);
   if (!def) return [];
+  const locked = lockedWeaponTalentOf(def);
+  if (locked) return [WEAPON_TALENTS[locked]];
   return D.weaponTalents.filter((t) =>
-    !t.weaponTypes || !def.type || t.weaponTypes.indexOf(def.type) >= 0);
+    !EXOTIC_TALENT.test(t.name) && !PERFECT_TALENT.test(t.name) &&
+    (!t.weaponTypes || !def.type || t.weaponTypes.indexOf(def.type) >= 0));
+}
+
+/** Drop a talent this weapon could not actually carry. */
+function validWeaponTalent(w, talentId) {
+  const def = weaponOf(w);
+  if (!def) return null;
+  const locked = lockedWeaponTalentOf(def);
+  if (locked) return locked;
+  return weaponTalentChoices(w).some((t) => t.id === talentId) ? talentId : null;
 }
 
 /* ------------------------------------------------------------------- engine */
@@ -626,7 +646,7 @@ function statsForWeapon(base, build, index, withConditional) {
       add(stats, statType, value, 'pct');
     }
   }
-  applyTalentModifiers(stats, WEAPON_TALENTS[w.talentId], withConditional);
+  applyTalentModifiers(stats, WEAPON_TALENTS[lockedWeaponTalentOf(def) || w.talentId], withConditional);
   if (def.critChance) add(stats, 'critChance', def.critChance, 'pct');
   if (def.critDamage) add(stats, 'critDamage', def.critDamage, 'pct');
   return stats;
@@ -795,7 +815,8 @@ function buildFromSpec(spec) {
     (row.attrs || []).forEach((statType, j) => {
       w.attrs[j] = { id: weaponAttrIdFor(statType), value: null };
     });
-    if (WEAPON_TALENTS[row.talent]) w.talentId = row.talent;
+    w.talentId = lockedWeaponTalentOf(WEAPONS[row.id])
+      || (WEAPON_TALENTS[row.talent] ? row.talent : null);
   });
   b.spec = D.specializations[spec.spec] ? spec.spec : null;
   b.perkTiers = spec.perks || {};
@@ -1247,11 +1268,18 @@ function renderWeaponSlot(w, index, ev) {
         + (adef ? '' : ' disabled') + ' aria-label="Weapon attribute value"></div></div>');
     }
 
-    const talent = WEAPON_TALENTS[w.talentId];
+    const lockedTalent = lockedWeaponTalentOf(def);
+    const chosenTalent = lockedTalent || w.talentId;
+    const talent = WEAPON_TALENTS[chosenTalent];
     rows.push('<div class="row-label"><span class="eyebrow">Talent</span>'
-      + '<select data-wpn="' + index + '" data-field="talentId" aria-label="Weapon talent">'
-      + options(alpha(weaponTalentChoices(w).map((t) => ({ value: t.id, text: t.name }))), w.talentId, '— no talent —')
+      + '<select data-wpn="' + index + '" data-field="talentId"' + (lockedTalent ? ' disabled' : '')
+      + ' aria-label="Weapon talent">'
+      + options(alpha(weaponTalentChoices(w).map((t) => ({ value: t.id, text: t.name }))),
+        chosenTalent, lockedTalent ? null : '— no talent —')
       + '</select></div>');
+    if (lockedTalent) {
+      rows.push('<p class="hint">Built into this ' + esc(def.quality.toLowerCase()) + ' weapon.</p>');
+    }
     if (talent) rows.push('<p class="talent-desc">' + richText(talent.description) + '</p>');
 
     for (const kind of ATTACHMENT_KINDS) {
@@ -1899,8 +1927,7 @@ function onEditorInput(e) {
       w.weaponId = el.value || null;
       w.talentId = null; w.attachments = {}; w.coreValue = null;
       w.attrs = [{ id: null, value: null }, { id: null, value: null }];
-      const def = weaponOf(w);
-      if (def && def.defaultTalent && WEAPON_TALENTS[def.defaultTalent]) w.talentId = def.defaultTalent;
+      w.talentId = lockedWeaponTalentOf(weaponOf(w));
       structural = true;
     } else if (field === 'coreValue') { w.coreValue = num(el.value); }
     else if (field === 'talentId') { w.talentId = el.value || null; structural = true; }

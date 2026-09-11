@@ -32,7 +32,9 @@ whole app.
   already wear at least one of, simultaneously — three Striker pieces plus that backpack reach the
   4-piece bonus, and two Unit Alloys reach the 3-piece at the same time. The supplied piece shows
   as a green pip so it is distinguishable from one you are actually wearing.
-- **Weapons** — 3 slots: weapon, core attribute, two attributes, talent, attachments, expertise.
+- **Weapons** — 3 slots: weapon, two attributes, talent, attachments, expertise. The core attribute
+  is not a choice — it is the weapon's own type damage at 15% (an AR reads "Assault Rifle Damage",
+  an LMG "LMG Damage"), so it follows the weapon and only its value is editable.
   The sidearm slot accepts pistols plus the shotguns the data marks sidearm-only (the Backup
   Boomstick); the two long-gun slots accept everything else. A saved loadout holding a weapon its
   slot no longer accepts is cleared on load.
@@ -222,6 +224,13 @@ applied to the source data:
    and the Core Strength backpack are flagged too, and all four are given zero secondary attribute
    lines. The Core Strength backpack's talent flag is cleared — the set has no backpack talent, so
    without this it would inherit the chest's through the set's shared pool.
+
+5. A weapon's core attribute was modelled as a choice between Damage to Armor, Damage to Health
+   and Critical Hit Chance. It is the weapon's own type damage, fixed by the weapon — the two
+   weapons that do carry a `weaponCoreAttrs` field agree, both leading with their type damage at
+   15% and type-matched to themselves. Those three former "cores" are real rolls at their stated
+   caps, so they move into the weapon attribute pool rather than being dropped, taking the larger
+   cap where they clash with an entry already there.
 
 The per-slot attribute count is taken as two everywhere. The fixed rolls on exotics are the evidence:
 Coyote's Mask is 6% critical hit chance plus 12% critical hit damage, and the Waveform holster and

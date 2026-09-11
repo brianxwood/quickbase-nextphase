@@ -74,7 +74,6 @@ const PROTO_ATTRS = byId(D.prototypeGearAttributes);
 const MODS = byId(D.mods);
 const GEAR_CORES = byId(D.gearCoreAttributes);
 const WEAPON_ATTRS = byId(D.weaponAttributes);
-const WEAPON_CORES = byId(D.weaponCoreAttributes);
 const ATTACHMENTS = {};
 for (const kind of ATTACHMENT_KINDS) for (const a of (D.attachments[kind] || [])) ATTACHMENTS[a.id] = a;
 
@@ -294,7 +293,7 @@ const emptyGear = (slot) => ({
 });
 
 const emptyWeapon = () => ({
-  weaponId: null, coreId: null, coreValue: null,
+  weaponId: null, coreValue: null,
   attrs: [{ id: null, value: null }, { id: null, value: null }],
   talentId: null, attachments: {}, expertise: 0
 });
@@ -333,7 +332,6 @@ function normalizeBuild(b) {
   (b.weapons || []).slice(0, 3).forEach((src, i) => {
     const w = out.weapons[i];
     w.weaponId = WEAPONS[src.weaponId] && fitsSlot(WEAPONS[src.weaponId], i) ? src.weaponId : null;
-    w.coreId = src.coreId || null;
     w.coreValue = src.coreValue == null ? null : Number(src.coreValue);
     w.talentId = src.talentId || null;
     w.expertise = Number(src.expertise) || 0;
@@ -610,8 +608,11 @@ function statsForWeapon(base, build, index, withConditional) {
   if (!def) return stats;
 
   add(stats, 'weaponDamage', w.expertise || 0, 'pct');
-  const core = w.coreId ? WEAPON_CORES[w.coreId] : null;
-  if (core) add(stats, core.statType, w.coreValue == null ? capOf(core) : w.coreValue, 'pct');
+  const coreStat = TYPE_DAMAGE_STAT[def.type];
+  if (coreStat) {
+    const value = w.coreValue == null ? konst('weaponTypeCoreDamage') : w.coreValue;
+    add(stats, coreStat, value, 'pct');
+  }
   for (const a of w.attrs) {
     if (!a || !a.id) continue;
     const adef = WEAPON_ATTRS[a.id];
@@ -768,10 +769,6 @@ const weaponAttrIdFor = (statType) => {
   const def = D.weaponAttributes.find((a) => a.statType === statType);
   return def ? def.id : null;
 };
-const weaponCoreIdFor = (statType) => {
-  const def = D.weaponCoreAttributes.find((a) => a.statType === statType);
-  return def ? def.id : null;
-};
 
 function buildFromSpec(spec) {
   const b = emptyBuild(spec.name);
@@ -795,7 +792,6 @@ function buildFromSpec(spec) {
     const w = b.weapons[i];
     if (!WEAPONS[row.id]) return;
     w.weaponId = row.id;
-    w.coreId = weaponCoreIdFor(row.core);
     (row.attrs || []).forEach((statType, j) => {
       w.attrs[j] = { id: weaponAttrIdFor(statType), value: null };
     });
@@ -820,8 +816,8 @@ const SEEDS = [
       { slot: 'Kneepads', brand: 'Providence Defense', core: 'weaponDamage', attrs: ['critDamage', 'headshotDamage'] }
     ],
     weapons: [
-      { id: 'w_police_m4', core: 'critChance', attrs: ['critDamage', 'critChance'], talent: 'wt_strained' },
-      { id: 'w_classic_m1a', core: 'damageToArmor', attrs: ['critDamage', 'headshotDamage'], talent: 'wt_rifleman' }
+      { id: 'w_police_m4', attrs: ['critDamage', 'critChance'], talent: 'wt_strained' },
+      { id: 'w_classic_m1a', attrs: ['critDamage', 'headshotDamage'], talent: 'wt_rifleman' }
     ]
   },
   {
@@ -836,8 +832,8 @@ const SEEDS = [
       { slot: 'Kneepads', brand: 'Petrov Defense Group', core: 'armor', attrs: ['critDamage', 'hazardProtection'] }
     ],
     weapons: [
-      { id: 'w_bm_rpk74_e', core: 'critChance', attrs: ['critDamage', 'critChance'], talent: 'wt_strained' },
-      { id: 'w_police_m4', core: 'damageToArmor', attrs: ['critDamage', 'critChance'], talent: 'wt_optimist' }
+      { id: 'w_bm_rpk74_e', attrs: ['critDamage', 'critChance'], talent: 'wt_strained' },
+      { id: 'w_police_m4', attrs: ['critDamage', 'critChance'], talent: 'wt_optimist' }
     ]
   },
   {
@@ -853,7 +849,7 @@ const SEEDS = [
       { slot: 'Kneepads', brand: 'Wyvern Wear', core: 'armor', attrs: ['statusEffects', 'hazardProtection'] }
     ],
     weapons: [
-      { id: 'w_st_elmos', core: 'damageToArmor', attrs: ['critDamage', 'critChance'], talent: 'wt_in_sync' }
+      { id: 'w_st_elmos', attrs: ['critDamage', 'critChance'], talent: 'wt_in_sync' }
     ]
   }
 ];
@@ -1232,14 +1228,13 @@ function renderWeaponSlot(w, index, ev) {
       + '<div><span class="k eyebrow">Reload</span><span class="v">' + dmg.reload.toFixed(2) + 's</span></div>'
       + '</div>');
 
-    const core = w.coreId ? WEAPON_CORES[w.coreId] : null;
-    rows.push('<div class="row-label"><span class="eyebrow">Core</span><div class="attr-row">'
-      + '<select data-wpn="' + index + '" data-field="coreId" aria-label="Weapon core">'
-      + options(alpha(D.weaponCoreAttributes.map((c) => ({ value: c.id, text: c.name }))), w.coreId, '— no core —')
-      + '</select>'
+    const coreLabel = (TYPE_LABEL[def.type] || def.type) + ' Damage %';
+    rows.push('<div class="row-label"><span class="eyebrow">Core</span><div class="attr-row locked">'
+      + '<input type="text" value="' + esc(coreLabel) + '" disabled aria-label="Weapon core attribute">'
       + '<input type="number" step="any" data-wpn="' + index + '" data-field="coreValue"'
-      + ' value="' + (core ? (w.coreValue == null ? capOf(core) : w.coreValue) : '') + '"'
-      + (core ? '' : ' disabled') + ' aria-label="Weapon core value"></div></div>');
+      + ' value="' + (w.coreValue == null ? konst('weaponTypeCoreDamage') : w.coreValue) + '"'
+      + ' aria-label="Weapon core value"></div></div>'
+      + '<p class="hint">Core is fixed to the weapon type.</p>');
 
     for (let i = 0; i < 2; i++) {
       const a = w.attrs[i] || {};
@@ -1746,7 +1741,6 @@ function renderTables() {
     ['Gear core attributes', D.gearCoreAttributes],
     ['Gear attributes', D.gearAttributes],
     ['Gear mods', D.mods],
-    ['Weapon core attributes', D.weaponCoreAttributes],
     ['Weapon attributes', D.weaponAttributes],
     ['Prototype attributes', D.prototypeGearAttributes]
   ];
@@ -1903,13 +1897,12 @@ function onEditorInput(e) {
     const field = el.dataset.field;
     if (field === 'weaponId') {
       w.weaponId = el.value || null;
-      w.talentId = null; w.attachments = {};
+      w.talentId = null; w.attachments = {}; w.coreValue = null;
       w.attrs = [{ id: null, value: null }, { id: null, value: null }];
       const def = weaponOf(w);
       if (def && def.defaultTalent && WEAPON_TALENTS[def.defaultTalent]) w.talentId = def.defaultTalent;
       structural = true;
-    } else if (field === 'coreId') { w.coreId = el.value || null; w.coreValue = null; structural = true; }
-    else if (field === 'coreValue') { w.coreValue = num(el.value); }
+    } else if (field === 'coreValue') { w.coreValue = num(el.value); }
     else if (field === 'talentId') { w.talentId = el.value || null; structural = true; }
     else if (field === 'expertise') { w.expertise = Math.max(0, Math.min(MAX_EXPERTISE, num(el.value) || 0)); structural = e.type === 'change'; }
     else if (el.dataset.attachment) { w.attachments[el.dataset.attachment] = el.value || null; structural = true; }

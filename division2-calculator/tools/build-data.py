@@ -85,6 +85,19 @@ for kind, mods in db["attachments"].items():
         if "magazineSize" in m:
             m["magazineSizePct"] = m.pop("magazineSize")
 
+# A weapon's core attribute is its own weapon-type damage, fixed by the weapon — an AR reads
+# "Assault Rifle Damage +15%". The source instead modelled Damage to Armor / Damage to Health /
+# Critical Hit Chance as selectable cores; the weapons that do carry weaponCoreAttrs disagree,
+# both leading with their type damage at 15. Those three are real rolls at those caps though, so
+# they move into the attribute pool rather than being dropped, keeping the larger cap on a clash.
+by_stat = {a["statType"]: a for a in db["weaponAttributes"]}
+for core in db["weaponCoreAttributes"]:
+    existing = by_stat.get(core["statType"])
+    if existing is None:
+        db["weaponAttributes"].append({k: v for k, v in core.items() if k != "id"} | {"id": core["id"]})
+    elif core["maxValue"] > existing["maxValue"]:
+        existing["maxValue"] = core["maxValue"]
+
 conditional_counts = {"gearTalents": [0, 0], "weaponTalents": [0, 0]}
 for key in ("gearTalents", "weaponTalents"):
     for t in db[key]:
@@ -180,7 +193,7 @@ out = {
             }
         }
     },
-    "constants": {"baseCritDamage": 25, "critChanceCap": 60, "baseHealth": 100000,
+    "constants": {"weaponTypeCoreDamage": 15, "baseCritDamage": 25, "critChanceCap": 60, "baseHealth": 100000,
                   "skillTierMax": 6, "skillDamagePerTier": 15,
                   "pvpMultiplier": 0.5, "falloffWorst": 0.5,
                   # How many weapon-type perks a specialization may run at once. The source has
